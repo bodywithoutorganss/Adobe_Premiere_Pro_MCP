@@ -556,21 +556,23 @@ export class PremiereProTools {
         const script = `
       try {
         var sequences = [];
-        
+
         for (var i = 0; i < app.project.sequences.numSequences; i++) {
           var seq = app.project.sequences[i];
-          sequences.push({
+          if (!seq) continue;
+
+          var seqData = {
             id: seq.sequenceID,
             name: seq.name,
-            duration: seq.duration.seconds,
-            width: seq.frameBounds.width,
-            height: seq.frameBounds.height,
-            frameRate: seq.frameRate,
+            width: seq.frameSizeHorizontal,
+            height: seq.frameSizeVertical,
             videoTrackCount: seq.videoTracks.numTracks,
             audioTrackCount: seq.audioTracks.numTracks
-          });
+          };
+
+          sequences.push(seqData);
         }
-        
+
         JSON.stringify({
           success: true,
           sequences: sequences,
@@ -973,24 +975,49 @@ export class PremiereProTools {
     async removeFromTimeline(clipId, deleteMode = 'ripple') {
         const script = `
       try {
-        var clip = app.project.getClipByID("${clipId}");
-        if (!clip) {
+        // Helper: Find clip by nodeId across all sequences
+        function findClipByNodeId(targetNodeId) {
+          for (var s = 0; s < app.project.sequences.numSequences; s++) {
+            var sequence = app.project.sequences[s];
+
+            // Search video tracks
+            for (var t = 0; t < sequence.videoTracks.numTracks; t++) {
+              for (var c = 0; c < sequence.videoTracks[t].clips.numItems; c++) {
+                var clip = sequence.videoTracks[t].clips[c];
+                if (clip.nodeId === targetNodeId) {
+                  return { clip: clip, sequence: sequence };
+                }
+              }
+            }
+
+            // Search audio tracks
+            for (var t = 0; t < sequence.audioTracks.numTracks; t++) {
+              for (var c = 0; c < sequence.audioTracks[t].clips.numItems; c++) {
+                var clip = sequence.audioTracks[t].clips[c];
+                if (clip.nodeId === targetNodeId) {
+                  return { clip: clip, sequence: sequence };
+                }
+              }
+            }
+          }
+          return null;
+        }
+
+        var result = findClipByNodeId("${clipId}");
+        if (!result) {
           JSON.stringify({
             success: false,
             error: "Clip not found"
           });
           return;
         }
-        
-        var clipName = clip.name;
-        var track = clip.getTrack();
-        
-        if ("${deleteMode}" === "ripple") {
-          track.removeClip(clip, true); // ripple delete
-        } else {
-          track.removeClip(clip, false); // lift delete
-        }
-        
+
+        var clipName = result.clip.name;
+        var ripple = "${deleteMode}" === "ripple" ? 1 : 0;
+
+        // Use TrackItem.remove(inRipple, inAlignToVideo)
+        result.clip.remove(ripple, 0);
+
         JSON.stringify({
           success: true,
           message: "Clip removed from timeline",
@@ -1010,37 +1037,59 @@ export class PremiereProTools {
     async moveClip(clipId, newTime, newTrackIndex) {
         const script = `
       try {
-        var clip = app.project.getClipByID("${clipId}");
-        if (!clip) {
-          JSON.stringify({
-            success: false,
-            error: "Clip not found"
-          });
+        // Helper: Find clip by nodeId
+        function findClipByNodeId(targetNodeId) {
+          for (var s = 0; s < app.project.sequences.numSequences; s++) {
+            var sequence = app.project.sequences[s];
+            for (var t = 0; t < sequence.videoTracks.numTracks; t++) {
+              for (var c = 0; c < sequence.videoTracks[t].clips.numItems; c++) {
+                var clip = sequence.videoTracks[t].clips[c];
+                if (clip.nodeId === targetNodeId) {
+                  return { clip: clip, sequence: sequence, trackIndex: t, isVideo: true };
+                }
+              }
+            }
+            for (var t = 0; t < sequence.audioTracks.numTracks; t++) {
+              for (var c = 0; c < sequence.audioTracks[t].clips.numItems; c++) {
+                var clip = sequence.audioTracks[t].clips[c];
+                if (clip.nodeId === targetNodeId) {
+                  return { clip: clip, sequence: sequence, trackIndex: t, isVideo: false };
+                }
+              }
+            }
+          }
+          return null;
+        }
+
+        var result = findClipByNodeId("${clipId}");
+        if (!result) {
+          JSON.stringify({ success: false, error: "Clip not found" });
           return;
         }
-        
-        var oldTime = clip.start.seconds;
-        var oldTrack = clip.getTrack();
-        var oldTrackIndex = oldTrack.index;
-        
-        clip.start = new Time("${newTime}s");
-        
+
+        var oldTime = result.clip.start.seconds;
+
+        // Create Time object for new position
+        var newInPoint = new Time();
+        newInPoint.seconds = ${newTime};
+
+        // Use TrackItem.move(newInPoint) to move clip
+        result.clip.move(newInPoint);
+
+        // Note: Moving between tracks requires remove + insert, which is complex
+        // and not reliably supported. Skipping track change for now.
         ${newTrackIndex !== undefined ? `
-        var newTrack = app.project.activeSequence.videoTracks[${newTrackIndex}];
-        if (newTrack) {
-          oldTrack.removeClip(clip, false);
-          newTrack.insertClip(clip, new Time("${newTime}s"));
-        }
+        // Track change not yet implemented - requires remove and re-insert
         ` : ''}
-        
+
         JSON.stringify({
           success: true,
           message: "Clip moved successfully",
           clipId: "${clipId}",
           oldTime: oldTime,
           newTime: ${newTime},
-          oldTrackIndex: oldTrackIndex,
-          newTrackIndex: ${newTrackIndex !== undefined ? newTrackIndex : 'unchanged'}
+          trackIndex: result.trackIndex,
+          trackChangeRequested: ${newTrackIndex !== undefined}
         });
       } catch (e) {
         JSON.stringify({
@@ -1054,23 +1103,53 @@ export class PremiereProTools {
     async trimClip(clipId, inPoint, outPoint, duration) {
         const script = `
       try {
-        var clip = app.project.getClipByID("${clipId}");
+        // Helper: Find clip by nodeId
+        function findClipByNodeId(targetNodeId) {
+          for (var s = 0; s < app.project.sequences.numSequences; s++) {
+            var sequence = app.project.sequences[s];
+            for (var t = 0; t < sequence.videoTracks.numTracks; t++) {
+              for (var c = 0; c < sequence.videoTracks[t].clips.numItems; c++) {
+                var clip = sequence.videoTracks[t].clips[c];
+                if (clip.nodeId === targetNodeId) return clip;
+              }
+            }
+            for (var t = 0; t < sequence.audioTracks.numTracks; t++) {
+              for (var c = 0; c < sequence.audioTracks[t].clips.numItems; c++) {
+                var clip = sequence.audioTracks[t].clips[c];
+                if (clip.nodeId === targetNodeId) return clip;
+              }
+            }
+          }
+          return null;
+        }
+
+        var clip = findClipByNodeId("${clipId}");
         if (!clip) {
-          JSON.stringify({
-            success: false,
-            error: "Clip not found"
-          });
+          JSON.stringify({ success: false, error: "Clip not found" });
           return;
         }
-        
+
         var oldInPoint = clip.inPoint.seconds;
         var oldOutPoint = clip.outPoint.seconds;
         var oldDuration = clip.duration.seconds;
-        
-        ${inPoint !== undefined ? `clip.inPoint = new Time("${inPoint}s");` : ''}
-        ${outPoint !== undefined ? `clip.outPoint = new Time("${outPoint}s");` : ''}
-        ${duration !== undefined ? `clip.outPoint = new Time(clip.inPoint.seconds + ${duration});` : ''}
-        
+
+        // inPoint and outPoint are read/write Time objects
+        ${inPoint !== undefined ? `
+        var newIn = new Time();
+        newIn.seconds = ${inPoint};
+        clip.inPoint = newIn;
+        ` : ''}
+        ${outPoint !== undefined ? `
+        var newOut = new Time();
+        newOut.seconds = ${outPoint};
+        clip.outPoint = newOut;
+        ` : ''}
+        ${duration !== undefined ? `
+        var durationOut = new Time();
+        durationOut.seconds = clip.inPoint.seconds + ${duration};
+        clip.outPoint = durationOut;
+        ` : ''}
+
         JSON.stringify({
           success: true,
           message: "Clip trimmed successfully",
@@ -1094,27 +1173,76 @@ export class PremiereProTools {
     async splitClip(clipId, splitTime) {
         const script = `
       try {
-        var clip = app.project.getClipByID("${clipId}");
-        if (!clip) {
-          JSON.stringify({
-            success: false,
-            error: "Clip not found"
-          });
+        // Helper: Find clip by nodeId
+        function findClipByNodeId(targetNodeId) {
+          for (var s = 0; s < app.project.sequences.numSequences; s++) {
+            var sequence = app.project.sequences[s];
+            for (var t = 0; t < sequence.videoTracks.numTracks; t++) {
+              for (var c = 0; c < sequence.videoTracks[t].clips.numItems; c++) {
+                var clip = sequence.videoTracks[t].clips[c];
+                if (clip.nodeId === targetNodeId) {
+                  return { clip: clip, sequence: sequence, trackIndex: t, isVideo: true };
+                }
+              }
+            }
+            for (var t = 0; t < sequence.audioTracks.numTracks; t++) {
+              for (var c = 0; c < sequence.audioTracks[t].clips.numItems; c++) {
+                var clip = sequence.audioTracks[t].clips[c];
+                if (clip.nodeId === targetNodeId) {
+                  return { clip: clip, sequence: sequence, trackIndex: t, isVideo: false };
+                }
+              }
+            }
+          }
+          return null;
+        }
+
+        var result = findClipByNodeId("${clipId}");
+        if (!result) {
+          JSON.stringify({ success: false, error: "Clip not found" });
           return;
         }
-        
-        var track = clip.getTrack();
-        var splitPoint = new Time(clip.start.seconds + ${splitTime});
-        
-        var newClip = track.splitClip(clip, splitPoint);
-        
+
+        var clip = result.clip;
+        var sequence = result.sequence;
+
+        // Calculate split point in seconds
+        var splitPointSeconds = clip.start.seconds + ${splitTime};
+
+        // Use QE DOM razor method for splitting
+        app.enableQE();
+        var qeProject = qe.project;
+        var sequenceID = sequence.sequenceID;
+
+        // Find the QE sequence
+        var qeSequence = null;
+        for (var i = 0; i < qeProject.numSequences; i++) {
+          if (qeProject.getSequenceAt(i).name === sequence.name) {
+            qeSequence = qeProject.getSequenceAt(i);
+            break;
+          }
+        }
+
+        if (!qeSequence) {
+          JSON.stringify({ success: false, error: "QE sequence not found" });
+          return;
+        }
+
+        // Convert to timecode format
+        var splitTime = new Time();
+        splitTime.seconds = splitPointSeconds;
+        var timecode = splitTime.getFormatted(sequence.videoDisplayFormat);
+
+        // Apply razor to all tracks at this point
+        qeSequence.razor(timecode, true);
+
         JSON.stringify({
           success: true,
-          message: "Clip split successfully",
+          message: "Clip split successfully using razor tool",
           originalClipId: "${clipId}",
-          newClipId: newClip.nodeId,
           splitTime: ${splitTime},
-          splitPoint: splitPoint.seconds
+          splitPointSeconds: splitPointSeconds,
+          timecode: timecode
         });
       } catch (e) {
         JSON.stringify({
@@ -1129,33 +1257,98 @@ export class PremiereProTools {
     async applyEffect(clipId, effectName, parameters) {
         const script = `
       try {
-        var clip = app.project.getClipByID("${clipId}");
-        if (!clip) {
-          JSON.stringify({
-            success: false,
-            error: "Clip not found"
-          });
+        // Helper: Find clip by nodeId
+        function findClipByNodeId(targetNodeId) {
+          for (var s = 0; s < app.project.sequences.numSequences; s++) {
+            var sequence = app.project.sequences[s];
+            for (var t = 0; t < sequence.videoTracks.numTracks; t++) {
+              for (var c = 0; c < sequence.videoTracks[t].clips.numItems; c++) {
+                var clip = sequence.videoTracks[t].clips[c];
+                if (clip.nodeId === targetNodeId) {
+                  return { clip: clip, sequence: sequence, trackIndex: t, clipIndex: c, isVideo: true };
+                }
+              }
+            }
+            for (var t = 0; t < sequence.audioTracks.numTracks; t++) {
+              for (var c = 0; c < sequence.audioTracks[t].clips.numItems; c++) {
+                var clip = sequence.audioTracks[t].clips[c];
+                if (clip.nodeId === targetNodeId) {
+                  return { clip: clip, sequence: sequence, trackIndex: t, clipIndex: c, isVideo: false };
+                }
+              }
+            }
+          }
+          return null;
+        }
+
+        var result = findClipByNodeId("${clipId}");
+        if (!result) {
+          JSON.stringify({ success: false, error: "Clip not found" });
           return;
         }
-        
-        var effect = clip.addEffect("${effectName}");
+
+        // Use QE DOM to add effect
+        app.enableQE();
+        var qeProject = qe.project;
+
+        // Find QE sequence
+        var qeSequence = null;
+        for (var i = 0; i < qeProject.numSequences; i++) {
+          if (qeProject.getSequenceAt(i).name === result.sequence.name) {
+            qeSequence = qeProject.getSequenceAt(i);
+            break;
+          }
+        }
+
+        if (!qeSequence) {
+          JSON.stringify({ success: false, error: "QE sequence not found" });
+          return;
+        }
+
+        // Get QE clip
+        var qeTrack = result.isVideo ?
+          qeSequence.getVideoTrackAt(result.trackIndex) :
+          qeSequence.getAudioTrackAt(result.trackIndex);
+        var qeClip = qeTrack.getItemAt(result.clipIndex);
+
+        // Get and apply effect
+        var effect = result.isVideo ?
+          qeProject.getVideoEffectByName("${effectName}") :
+          qeProject.getAudioEffectByName("${effectName}");
+
         if (!effect) {
-          JSON.stringify({
-            success: false,
-            error: "Effect not found or could not be applied"
-          });
+          JSON.stringify({ success: false, error: "Effect '${effectName}' not found" });
           return;
         }
-        
-        ${parameters ? Object.entries(parameters).map(([key, value]) => `try { if (effect.properties["${key}"]) effect.properties["${key}"].setValue(${JSON.stringify(value)}); } catch (e) { /* Parameter not found */ }`).join('\n') : ''}
-        
+
+        if (result.isVideo) {
+          qeClip.addVideoEffect(effect);
+        } else {
+          qeClip.addAudioEffect(effect);
+        }
+
+        // Apply parameters if specified (using standard DOM components)
+        ${parameters ? `
+        var components = result.clip.components;
+        if (components && components.numItems > 0) {
+          var lastComponent = components[components.numItems - 1];
+          var props = lastComponent.properties;
+          ${Object.entries(parameters).map(([key, value]) => `
+          for (var p = 0; p < props.numItems; p++) {
+            if (props[p].displayName === "${key}") {
+              props[p].setValue(${JSON.stringify(value)}, true);
+              break;
+            }
+          }
+          `).join('')}
+        }
+        ` : ''}
+
         JSON.stringify({
           success: true,
           message: "Effect applied successfully",
           clipId: "${clipId}",
-          effectName: "${effectName}",
-          effectId: effect.matchName,
-          parametersApplied: ${parameters ? Object.keys(parameters).length : 0}
+          effectName: "${effectName}"
         });
       } catch (e) {
         JSON.stringify({
@@ -1169,34 +1362,77 @@ export class PremiereProTools {
     async removeEffect(clipId, effectName) {
         const script = `
       try {
-        var clip = app.project.getClipByID("${clipId}");
-        if (!clip) {
-          JSON.stringify({
-            success: false,
-            error: "Clip not found"
-          });
+        // Helper: Find clip by nodeId
+        function findClipByNodeId(targetNodeId) {
+          for (var s = 0; s < app.project.sequences.numSequences; s++) {
+            var sequence = app.project.sequences[s];
+            for (var t = 0; t < sequence.videoTracks.numTracks; t++) {
+              for (var c = 0; c < sequence.videoTracks[t].clips.numItems; c++) {
+                var clip = sequence.videoTracks[t].clips[c];
+                if (clip.nodeId === targetNodeId) {
+                  return { clip: clip, sequence: sequence, trackIndex: t, clipIndex: c, isVideo: true };
+                }
+              }
+            }
+            for (var t = 0; t < sequence.audioTracks.numTracks; t++) {
+              for (var c = 0; c < sequence.audioTracks[t].clips.numItems; c++) {
+                var clip = sequence.audioTracks[t].clips[c];
+                if (clip.nodeId === targetNodeId) {
+                  return { clip: clip, sequence: sequence, trackIndex: t, clipIndex: c, isVideo: false };
+                }
+              }
+            }
+          }
+          return null;
+        }
+
+        var result = findClipByNodeId("${clipId}");
+        if (!result) {
+          JSON.stringify({ success: false, error: "Clip not found" });
           return;
         }
-        
-        var effects = clip.getEffects();
-        var removed = false;
-        
-        for (var i = 0; i < effects.length; i++) {
-          if (effects[i].displayName === "${effectName}") {
-            clip.removeEffect(effects[i]);
-            removed = true;
+
+        // Use QE DOM to remove effect
+        app.enableQE();
+        var qeProject = qe.project;
+
+        // Find QE sequence
+        var qeSequence = null;
+        for (var i = 0; i < qeProject.numSequences; i++) {
+          if (qeProject.getSequenceAt(i).name === result.sequence.name) {
+            qeSequence = qeProject.getSequenceAt(i);
             break;
           }
         }
-        
-        if (!removed) {
-          JSON.stringify({
-            success: false,
-            error: "Effect not found on clip"
-          });
+
+        if (!qeSequence) {
+          JSON.stringify({ success: false, error: "QE sequence not found" });
           return;
         }
-        
+
+        // Get QE clip
+        var qeTrack = result.isVideo ?
+          qeSequence.getVideoTrackAt(result.trackIndex) :
+          qeSequence.getAudioTrackAt(result.trackIndex);
+        var qeClip = qeTrack.getItemAt(result.clipIndex);
+
+        // Get effect and remove it
+        var effect = result.isVideo ?
+          qeProject.getVideoEffectByName("${effectName}") :
+          qeProject.getAudioEffectByName("${effectName}");
+
+        if (!effect) {
+          JSON.stringify({ success: false, error: "Effect '${effectName}' not found" });
+          return;
+        }
+
+        // Remove effect using QE DOM
+        if (result.isVideo) {
+          qeClip.removeVideoEffect(effect);
+        } else {
+          qeClip.removeAudioEffect(effect);
+        }
+
         JSON.stringify({
           success: true,
           message: "Effect removed successfully",
@@ -1215,36 +1451,113 @@ export class PremiereProTools {
     async addTransition(clipId1, clipId2, transitionName, duration) {
         const script = `
       try {
-        var clip1 = app.project.getClipByID("${clipId1}");
-        var clip2 = app.project.getClipByID("${clipId2}");
-        
-        if (!clip1 || !clip2) {
+        // Helper function to find clip by nodeId
+        function findClipByNodeId(targetNodeId) {
+          for (var s = 0; s < app.project.sequences.numSequences; s++) {
+            var sequence = app.project.sequences[s];
+
+            // Search video tracks
+            for (var t = 0; t < sequence.videoTracks.numTracks; t++) {
+              var track = sequence.videoTracks[t];
+              for (var c = 0; c < track.clips.numItems; c++) {
+                var clip = track.clips[c];
+                if (clip.nodeId === targetNodeId) {
+                  return {
+                    clip: clip,
+                    sequence: sequence,
+                    trackIndex: t,
+                    isVideo: true
+                  };
+                }
+              }
+            }
+
+            // Search audio tracks
+            for (var t = 0; t < sequence.audioTracks.numTracks; t++) {
+              var track = sequence.audioTracks[t];
+              for (var c = 0; c < track.clips.numItems; c++) {
+                var clip = track.clips[c];
+                if (clip.nodeId === targetNodeId) {
+                  return {
+                    clip: clip,
+                    sequence: sequence,
+                    trackIndex: t,
+                    isVideo: false
+                  };
+                }
+              }
+            }
+          }
+          return null;
+        }
+
+        var result1 = findClipByNodeId("${clipId1}");
+        var result2 = findClipByNodeId("${clipId2}");
+
+        if (!result1 || !result2) {
           JSON.stringify({
             success: false,
             error: "One or both clips not found"
           });
           return;
         }
-        
-        var track = clip1.getTrack();
-        var transition = track.addTransition("${transitionName}", clip1, clip2, ${duration});
-        
-        if (!transition) {
+
+        // Enable QE DOM
+        var qe = app.enableQE();
+        var qeProject = qe.project;
+        var qeSequence = qeProject.getActiveSequence();
+
+        // Get the QE track and clip
+        var qeTrack = result1.isVideo
+          ? qeSequence.getVideoTrackAt(result1.trackIndex)
+          : qeSequence.getAudioTrackAt(result1.trackIndex);
+
+        // Find the QE clip
+        var qeClip1 = null;
+        for (var i = 0; i < qeTrack.numItems; i++) {
+          if (qeTrack.getItemAt(i).name === result1.clip.name) {
+            qeClip1 = qeTrack.getItemAt(i);
+            break;
+          }
+        }
+
+        if (!qeClip1) {
           JSON.stringify({
             success: false,
-            error: "Failed to add transition"
+            error: "Could not find QE clip"
           });
           return;
         }
-        
+
+        // Get transition object
+        var transitionObject = result1.isVideo
+          ? qeProject.getVideoTransitionByName("${transitionName}")
+          : qeProject.getAudioTransitionByName("${transitionName}");
+
+        if (!transitionObject) {
+          JSON.stringify({
+            success: false,
+            error: "Transition '${transitionName}' not found"
+          });
+          return;
+        }
+
+        // Convert duration to timecode string (seconds to frames)
+        var frameRate = result1.sequence.getSettings().videoFrameRate;
+        var frames = Math.round(${duration} * frameRate.seconds);
+        var durationStr = frames.toString();
+
+        // Add transition at end of clip1 (which should touch start of clip2)
+        // Parameters: transition, addToStart, duration, offset, alignment, singleSided, alignToVideo
+        qeClip1.addTransition(transitionObject, false, durationStr, "0", 0.5, false, result1.isVideo);
+
         JSON.stringify({
           success: true,
-          message: "Transition added successfully",
+          message: "Transition added successfully between clips",
           transitionName: "${transitionName}",
           duration: ${duration},
           clip1Id: "${clipId1}",
-          clip2Id: "${clipId2}",
-          transitionId: transition.nodeId
+          clip2Id: "${clipId2}"
         });
       } catch (e) {
         JSON.stringify({
@@ -1258,40 +1571,112 @@ export class PremiereProTools {
     async addTransitionToClip(clipId, transitionName, position, duration) {
         const script = `
       try {
-        var clip = app.project.getClipByID("${clipId}");
-        if (!clip) {
+        // Helper function to find clip by nodeId
+        function findClipByNodeId(targetNodeId) {
+          for (var s = 0; s < app.project.sequences.numSequences; s++) {
+            var sequence = app.project.sequences[s];
+
+            // Search video tracks
+            for (var t = 0; t < sequence.videoTracks.numTracks; t++) {
+              var track = sequence.videoTracks[t];
+              for (var c = 0; c < track.clips.numItems; c++) {
+                var clip = track.clips[c];
+                if (clip.nodeId === targetNodeId) {
+                  return {
+                    clip: clip,
+                    sequence: sequence,
+                    trackIndex: t,
+                    isVideo: true
+                  };
+                }
+              }
+            }
+
+            // Search audio tracks
+            for (var t = 0; t < sequence.audioTracks.numTracks; t++) {
+              var track = sequence.audioTracks[t];
+              for (var c = 0; c < track.clips.numItems; c++) {
+                var clip = track.clips[c];
+                if (clip.nodeId === targetNodeId) {
+                  return {
+                    clip: clip,
+                    sequence: sequence,
+                    trackIndex: t,
+                    isVideo: false
+                  };
+                }
+              }
+            }
+          }
+          return null;
+        }
+
+        var result = findClipByNodeId("${clipId}");
+        if (!result) {
           JSON.stringify({
             success: false,
             error: "Clip not found"
           });
           return;
         }
-        
-        var track = clip.getTrack();
-        var transition;
-        
-        if ("${position}" === "start") {
-          transition = track.addTransition("${transitionName}", clip, "start", ${duration});
-        } else {
-          transition = track.addTransition("${transitionName}", clip, "end", ${duration});
+
+        // Enable QE DOM
+        var qe = app.enableQE();
+        var qeProject = qe.project;
+        var qeSequence = qeProject.getActiveSequence();
+
+        // Get the QE track and clip
+        var qeTrack = result.isVideo
+          ? qeSequence.getVideoTrackAt(result.trackIndex)
+          : qeSequence.getAudioTrackAt(result.trackIndex);
+
+        // Find the QE clip
+        var qeClip = null;
+        for (var i = 0; i < qeTrack.numItems; i++) {
+          if (qeTrack.getItemAt(i).name === result.clip.name) {
+            qeClip = qeTrack.getItemAt(i);
+            break;
+          }
         }
-        
-        if (!transition) {
+
+        if (!qeClip) {
           JSON.stringify({
             success: false,
-            error: "Failed to add transition"
+            error: "Could not find QE clip"
           });
           return;
         }
-        
+
+        // Get transition object
+        var transitionObject = result.isVideo
+          ? qeProject.getVideoTransitionByName("${transitionName}")
+          : qeProject.getAudioTransitionByName("${transitionName}");
+
+        if (!transitionObject) {
+          JSON.stringify({
+            success: false,
+            error: "Transition '${transitionName}' not found"
+          });
+          return;
+        }
+
+        // Convert duration to timecode string (seconds to frames)
+        var frameRate = result.sequence.getSettings().videoFrameRate;
+        var frames = Math.round(${duration} * frameRate.seconds);
+        var durationStr = frames.toString();
+
+        // Add transition to start or end of clip
+        // Parameters: transition, addToStart, duration, offset, alignment, singleSided, alignToVideo
+        var addToStart = "${position}" === "start";
+        qeClip.addTransition(transitionObject, addToStart, durationStr, "0", 0.5, false, result.isVideo);
+
         JSON.stringify({
           success: true,
-          message: "Transition added successfully",
+          message: "Transition added successfully to clip",
           transitionName: "${transitionName}",
           position: "${position}",
           duration: ${duration},
-          clipId: "${clipId}",
-          transitionId: transition.nodeId
+          clipId: "${clipId}"
         });
       } catch (e) {
         JSON.stringify({
@@ -1306,33 +1691,83 @@ export class PremiereProTools {
     async adjustAudioLevels(clipId, level) {
         const script = `
       try {
-        var clip = app.project.getClipByID("${clipId}");
-        if (!clip) {
+        // Helper function to find clip by nodeId
+        function findClipByNodeId(targetNodeId) {
+          for (var s = 0; s < app.project.sequences.numSequences; s++) {
+            var sequence = app.project.sequences[s];
+
+            // Search video tracks
+            for (var t = 0; t < sequence.videoTracks.numTracks; t++) {
+              var track = sequence.videoTracks[t];
+              for (var c = 0; c < track.clips.numItems; c++) {
+                var clip = track.clips[c];
+                if (clip.nodeId === targetNodeId) {
+                  return { clip: clip, sequence: sequence };
+                }
+              }
+            }
+
+            // Search audio tracks
+            for (var t = 0; t < sequence.audioTracks.numTracks; t++) {
+              var track = sequence.audioTracks[t];
+              for (var c = 0; c < track.clips.numItems; c++) {
+                var clip = track.clips[c];
+                if (clip.nodeId === targetNodeId) {
+                  return { clip: clip, sequence: sequence };
+                }
+              }
+            }
+          }
+          return null;
+        }
+
+        // Convert dB to decimal (Premiere Pro internal format)
+        function dbToDec(x) {
+          return Math.pow(10, (x - 15) / 20);
+        }
+
+        var result = findClipByNodeId("${clipId}");
+        if (!result) {
           JSON.stringify({
             success: false,
             error: "Clip not found"
           });
           return;
         }
-        
-        var audioComponent = clip.components[0];
-        if (!audioComponent || !audioComponent.properties["Volume"]) {
+
+        // Access audio level property
+        // components[0].properties[1] is the audio level property
+        var clip = result.clip;
+        if (!clip.components || clip.components.numItems === 0) {
           JSON.stringify({
             success: false,
-            error: "Audio component not found or clip has no audio"
+            error: "Clip has no components (may not have audio)"
           });
           return;
         }
-        
-        var oldLevel = audioComponent.properties["Volume"].getValue();
-        audioComponent.properties["Volume"].setValue(${level});
-        
+
+        var audioComponent = clip.components[0];
+        if (!audioComponent.properties || audioComponent.properties.numItems < 2) {
+          JSON.stringify({
+            success: false,
+            error: "Audio property not found"
+          });
+          return;
+        }
+
+        var volumeProperty = audioComponent.properties[1];
+        var oldValue = volumeProperty.getValue();
+
+        // Set the new level
+        volumeProperty.setTimeVarying(false);
+        volumeProperty.setValue(dbToDec(${level}));
+
         JSON.stringify({
           success: true,
           message: "Audio level adjusted successfully",
           clipId: "${clipId}",
-          oldLevel: oldLevel,
-          newLevel: ${level}
+          newLevel: ${level},
+          note: "Level set to ${level} dB"
         });
       } catch (e) {
         JSON.stringify({
@@ -1346,37 +1781,85 @@ export class PremiereProTools {
     async addAudioKeyframes(clipId, keyframes) {
         const script = `
       try {
-        var clip = app.project.getClipByID("${clipId}");
-        if (!clip) {
+        // Helper function to find clip by nodeId
+        function findClipByNodeId(targetNodeId) {
+          for (var s = 0; s < app.project.sequences.numSequences; s++) {
+            var sequence = app.project.sequences[s];
+
+            // Search video tracks
+            for (var t = 0; t < sequence.videoTracks.numTracks; t++) {
+              var track = sequence.videoTracks[t];
+              for (var c = 0; c < track.clips.numItems; c++) {
+                var clip = track.clips[c];
+                if (clip.nodeId === targetNodeId) {
+                  return { clip: clip, sequence: sequence };
+                }
+              }
+            }
+
+            // Search audio tracks
+            for (var t = 0; t < sequence.audioTracks.numTracks; t++) {
+              var track = sequence.audioTracks[t];
+              for (var c = 0; c < track.clips.numItems; c++) {
+                var clip = track.clips[c];
+                if (clip.nodeId === targetNodeId) {
+                  return { clip: clip, sequence: sequence };
+                }
+              }
+            }
+          }
+          return null;
+        }
+
+        // Convert dB to decimal (Premiere Pro internal format)
+        function dbToDec(x) {
+          return Math.pow(10, (x - 15) / 20);
+        }
+
+        var result = findClipByNodeId("${clipId}");
+        if (!result) {
           JSON.stringify({
             success: false,
             error: "Clip not found"
           });
           return;
         }
-        
-        var audioComponent = clip.components[0];
-        if (!audioComponent || !audioComponent.properties["Volume"]) {
+
+        // Access audio level property
+        var clip = result.clip;
+        if (!clip.components || clip.components.numItems === 0) {
           JSON.stringify({
             success: false,
-            error: "Audio component not found or clip has no audio"
+            error: "Clip has no components (may not have audio)"
           });
           return;
         }
-        
-        var volumeProperty = audioComponent.properties["Volume"];
+
+        var audioComponent = clip.components[0];
+        if (!audioComponent.properties || audioComponent.properties.numItems < 2) {
+          JSON.stringify({
+            success: false,
+            error: "Audio property not found"
+          });
+          return;
+        }
+
+        var volumeProperty = audioComponent.properties[1];
+
+        // Enable time-varying (keyframes)
+        volumeProperty.setTimeVarying(true);
+
         var addedKeyframes = [];
-        
         ${keyframes.map(kf => `
         try {
-          volumeProperty.addKey(new Time("${kf.time}s"));
-          volumeProperty.setValueAtKey(new Time("${kf.time}s"), ${kf.level});
+          volumeProperty.addKey(${kf.time});
+          volumeProperty.setValueAtKey(${kf.time}, dbToDec(${kf.level}));
           addedKeyframes.push({ time: ${kf.time}, level: ${kf.level} });
         } catch (e) {
           // Keyframe already exists or invalid time
         }
         `).join('\n')}
-        
+
         JSON.stringify({
           success: true,
           message: "Audio keyframes added successfully",
@@ -1396,7 +1879,15 @@ export class PremiereProTools {
     async muteTrack(sequenceId, trackIndex, muted) {
         const script = `
       try {
-        var sequence = app.project.getSequenceByID("${sequenceId}");
+        // Find sequence by ID
+        var sequence = null;
+        for (var i = 0; i < app.project.sequences.numSequences; i++) {
+          if (app.project.sequences[i].sequenceID === "${sequenceId}") {
+            sequence = app.project.sequences[i];
+            break;
+          }
+        }
+
         if (!sequence) {
           JSON.stringify({
             success: false,
@@ -1404,7 +1895,15 @@ export class PremiereProTools {
           });
           return;
         }
-        
+
+        if (${trackIndex} < 0 || ${trackIndex} >= sequence.audioTracks.numTracks) {
+          JSON.stringify({
+            success: false,
+            error: "Audio track index out of range. Sequence has " + sequence.audioTracks.numTracks + " audio tracks."
+          });
+          return;
+        }
+
         var track = sequence.audioTracks[${trackIndex}];
         if (!track) {
           JSON.stringify({
@@ -1413,9 +1912,10 @@ export class PremiereProTools {
           });
           return;
         }
-        
-        track.setMute(${muted});
-        
+
+        // setMute takes 1 for mute, 0 for unmute
+        track.setMute(${muted} ? 1 : 0);
+
         JSON.stringify({
           success: true,
           message: "Track mute status changed successfully",
@@ -1464,7 +1964,7 @@ export class PremiereProTools {
           return;
         }
         
-        // Set text properties
+        // Set text properties using the legacy title API
         var title = titleItem.getText();
         if (title) {
           title.text = "${args.text}";

@@ -267,24 +267,59 @@ export class PremiereProBridge {
 
   async addToTimeline(sequenceId: string, projectItemId: string, trackIndex: number, time: number): Promise<PremiereProClip> {
     const script = `
-      // Add item to timeline
-      var sequence = app.project.getSequenceByID("${sequenceId}");
-      var projectItem = app.project.getProjectItemByID("${projectItemId}");
-      var track = sequence.videoTracks[${trackIndex}];
-      
-      var clip = track.insertClip(projectItem, ${time});
-      
-      // Return clip info
-      JSON.stringify({
-        id: clip.clipID,
-        name: clip.name,
-        inPoint: clip.start,
-        outPoint: clip.end,
-        duration: clip.duration,
-        mediaPath: clip.projectItem.getMediaPath()
-      });
+      try {
+        // Find sequence by ID
+        var sequence = null;
+        for (var i = 0; i < app.project.sequences.numSequences; i++) {
+          if (app.project.sequences[i].sequenceID === "${sequenceId}") {
+            sequence = app.project.sequences[i];
+            break;
+          }
+        }
+        if (!sequence) {
+          JSON.stringify({ success: false, error: "Sequence not found" });
+          return;
+        }
+
+        // Find project item by searching through project recursively
+        function findProjectItem(parent, targetId) {
+          for (var i = 0; i < parent.children.numItems; i++) {
+            var item = parent.children[i];
+            if (item.nodeId === targetId || item.treePath === targetId) {
+              return item;
+            }
+            if (item.type === ProjectItemType.BIN && item.children) {
+              var found = findProjectItem(item, targetId);
+              if (found) return found;
+            }
+          }
+          return null;
+        }
+
+        var projectItem = findProjectItem(app.project.rootItem, "${projectItemId}");
+        if (!projectItem) {
+          JSON.stringify({ success: false, error: "Project item not found" });
+          return;
+        }
+
+        // Use sequence.insertClip() with proper parameters
+        // insertClip(projectItem, time, videoTrackIndex, audioTrackIndex)
+        var insertedClip = sequence.insertClip(projectItem, ${time}, ${trackIndex}, 0);
+
+        JSON.stringify({
+          success: true,
+          message: "Clip inserted successfully",
+          sequenceName: sequence.name,
+          itemName: projectItem.name
+        });
+      } catch (e) {
+        JSON.stringify({
+          success: false,
+          error: e.toString()
+        });
+      }
     `;
-    
+
     return await this.executeScript(script);
   }
 
