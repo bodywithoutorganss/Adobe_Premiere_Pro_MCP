@@ -2315,50 +2315,130 @@ export class PremiereProTools {
     }
     async applyLut(clipId, lutPath, intensity = 100) {
         const script = `
-      try {
-        var clip = app.project.getClipByID("${clipId}");
-        if (!clip) {
-          JSON.stringify({
-            success: false,
-            error: "Clip not found"
-          });
-          return;
-        }
-        
-        var lutEffect = clip.addEffect("Lumetri Color");
-        if (!lutEffect) {
-          JSON.stringify({
-            success: false,
-            error: "Failed to add LUT effect"
-          });
-          return;
-        }
-        
-        // Apply LUT file
+      (function() {
         try {
-          lutEffect.properties["Input LUT"].setValue("${lutPath}");
-          lutEffect.properties["Input LUT Intensity"].setValue(${intensity / 100});
-        } catch (e) {
-          JSON.stringify({
-            success: false,
-            error: "Failed to apply LUT file: " + e.toString()
+          // Helper function to find clip by nodeId
+          function findClipByNodeId(targetNodeId) {
+            for (var s = 0; s < app.project.sequences.numSequences; s++) {
+              var sequence = app.project.sequences[s];
+              for (var t = 0; t < sequence.videoTracks.numTracks; t++) {
+                var track = sequence.videoTracks[t];
+                for (var c = 0; c < track.clips.numItems; c++) {
+                  var clip = track.clips[c];
+                  if (clip.nodeId === targetNodeId) {
+                    return {
+                      clip: clip,
+                      sequence: sequence,
+                      trackIndex: t
+                    };
+                  }
+                }
+              }
+            }
+            return null;
+          }
+
+          var result = findClipByNodeId("${clipId}");
+          if (!result) {
+            return JSON.stringify({
+              success: false,
+              error: "Clip not found"
+            });
+          }
+
+          // Enable QE DOM for effect access
+          app.enableQE();
+          var qeProject = qe.project;
+          var qeSequence = qeProject.getActiveSequence();
+          var qeTrack = qeSequence.getVideoTrackAt(result.trackIndex);
+
+          // Find the QE clip by matching name
+          var qeClip = null;
+          for (var i = 0; i < qeTrack.numItems; i++) {
+            if (qeTrack.getItemAt(i).name === result.clip.name) {
+              qeClip = qeTrack.getItemAt(i);
+              break;
+            }
+          }
+
+          if (!qeClip) {
+            return JSON.stringify({
+              success: false,
+              error: "Could not find QE clip"
+            });
+          }
+
+          // Get Lumetri Color effect
+          var lumetriEffect = qeProject.getVideoEffectByName("Lumetri Color");
+          if (!lumetriEffect) {
+            return JSON.stringify({
+              success: false,
+              error: "Lumetri Color effect not available"
+            });
+          }
+
+          // Check if Lumetri is already applied
+          var lumetriComponent = null;
+          for (var i = 0; i < result.clip.components.numItems; i++) {
+            var comp = result.clip.components[i];
+            if (comp.displayName === "Lumetri Color") {
+              lumetriComponent = comp;
+              break;
+            }
+          }
+
+          // If not applied, add it
+          if (!lumetriComponent) {
+            qeClip.addVideoEffect(lumetriEffect);
+            // Re-fetch the component after adding
+            for (var i = 0; i < result.clip.components.numItems; i++) {
+              var comp = result.clip.components[i];
+              if (comp.displayName === "Lumetri Color") {
+                lumetriComponent = comp;
+                break;
+              }
+            }
+          }
+
+          if (!lumetriComponent) {
+            return JSON.stringify({
+              success: false,
+              error: "Failed to apply Lumetri Color effect"
+            });
+          }
+
+          // Apply LUT file
+          try {
+            var lutParam = lumetriComponent.properties.getParamForDisplayName("Input LUT");
+            if (lutParam) {
+              lutParam.setValue("${lutPath}");
+            }
+
+            var intensityParam = lumetriComponent.properties.getParamForDisplayName("Input LUT Intensity");
+            if (intensityParam) {
+              intensityParam.setValue(${intensity / 100});
+            }
+          } catch (e) {
+            return JSON.stringify({
+              success: false,
+              error: "Failed to apply LUT file: " + e.toString()
+            });
+          }
+
+          return JSON.stringify({
+            success: true,
+            message: "LUT applied successfully",
+            clipId: "${clipId}",
+            lutPath: "${lutPath}",
+            intensity: ${intensity}
           });
-          return;
+        } catch (e) {
+          return JSON.stringify({
+            success: false,
+            error: e.toString()
+          });
         }
-        
-        JSON.stringify({
-          success: true,
-          message: "LUT applied successfully",
-          clipId: "${clipId}",
-          lutPath: "${lutPath}",
-          intensity: ${intensity}
-        });
-      } catch (e) {
-        JSON.stringify({
-          success: false,
-          error: e.toString()
-        });
-      }
+      })();
     `;
         return await this.bridge.executeScript(script);
     }
@@ -2664,37 +2744,74 @@ export class PremiereProTools {
     }
     async speedChange(clipId, speed, maintainAudio = true) {
         const script = `
-      try {
-        var clip = app.project.getClipByID("${clipId}");
-        if (!clip) {
-          JSON.stringify({
-            success: false,
-            error: "Clip not found"
+      (function() {
+        try {
+          // Helper function to find clip by nodeId
+          function findClipByNodeId(targetNodeId) {
+            for (var s = 0; s < app.project.sequences.numSequences; s++) {
+              var sequence = app.project.sequences[s];
+
+              for (var t = 0; t < sequence.videoTracks.numTracks; t++) {
+                var track = sequence.videoTracks[t];
+                for (var c = 0; c < track.clips.numItems; c++) {
+                  var clip = track.clips[c];
+                  if (clip.nodeId === targetNodeId) {
+                    return { clip: clip, sequence: sequence };
+                  }
+                }
+              }
+
+              for (var t = 0; t < sequence.audioTracks.numTracks; t++) {
+                var track = sequence.audioTracks[t];
+                for (var c = 0; c < track.clips.numItems; c++) {
+                  var clip = track.clips[c];
+                  if (clip.nodeId === targetNodeId) {
+                    return { clip: clip, sequence: sequence };
+                  }
+                }
+              }
+            }
+            return null;
+          }
+
+          var result = findClipByNodeId("${clipId}");
+          if (!result) {
+            return JSON.stringify({
+              success: false,
+              error: "Clip not found"
+            });
+          }
+
+          var clip = result.clip;
+          var oldSpeed = clip.getSpeed();
+
+          // Set new speed
+          clip.setSpeed(${speed});
+
+          // Maintain audio pitch if requested
+          if (${maintainAudio}) {
+            try {
+              clip.maintainAudioPitch = true;
+            } catch (e) {
+              // maintainAudioPitch may not be available on all clips
+            }
+          }
+
+          return JSON.stringify({
+            success: true,
+            message: "Speed change applied successfully",
+            clipId: "${clipId}",
+            oldSpeed: oldSpeed,
+            newSpeed: ${speed},
+            maintainAudio: ${maintainAudio}
           });
-          return;
+        } catch (e) {
+          return JSON.stringify({
+            success: false,
+            error: e.toString()
+          });
         }
-        
-        var oldSpeed = clip.speed;
-        clip.speed = ${speed};
-        
-        if (${maintainAudio} && clip.hasAudio && clip.hasAudio()) {
-          clip.maintainAudioPitch = true;
-        }
-        
-        JSON.stringify({
-          success: true,
-          message: "Speed change applied successfully",
-          clipId: "${clipId}",
-          oldSpeed: oldSpeed,
-          newSpeed: ${speed},
-          maintainAudio: ${maintainAudio}
-        });
-      } catch (e) {
-        JSON.stringify({
-          success: false,
-          error: e.toString()
-        });
-      }
+      })();
     `;
         return await this.bridge.executeScript(script);
     }
