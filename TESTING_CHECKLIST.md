@@ -462,8 +462,12 @@ node test-adjust-audio.cjs
 ---
 
 ### 19. Fade Audio ⏸️
-**Test Script:** Create `test-fade-audio.cjs`
+**Test Script:** `test-fade-audio.cjs`
 **Status:** NOT YET TESTED
+
+```bash
+node test-fade-audio.cjs
+```
 
 **Expected Result:**
 - Fade in/out applied
@@ -471,33 +475,60 @@ node test-adjust-audio.cjs
 - Audio fades smoothly during playback
 
 **Fades to Test:**
-- [ ] Fade in at clip start
-- [ ] Fade out at clip end
-- [ ] Custom duration fades
+- [ ] Fade in at clip start (1 second)
+- [ ] Fade out at clip end (2 seconds)
+- [ ] Custom duration fades (0.5s quick, 3s long)
+
+**Use Cases:** Music bed fades for cut sheet workflows
 
 ---
 
 ## 🎬 Advanced Operations
 
 ### 20. Export Sequence ⏸️
-**Test Script:** Create `test-export.cjs`
+**Test Script:** `test-export-sequence.cjs`
 **Status:** NOT YET TESTED
 
+```bash
+node test-export-sequence.cjs
+```
+
 **Expected Result:**
-- Export job added to queue
-- Export settings correct
-- File created at specified path
+- Export job added to Adobe Media Encoder queue
+- Export settings correct (format, resolution, bitrate)
+- File created at specified path after encoding completes
+
+**Exports to Test:**
+- [ ] H.264 1080p (1920x1080, 12 Mbps)
+- [ ] Vertical 9:16 (1080x1920, 10 Mbps) - For cut sheets
+- [ ] 4K export (3840x2160)
+- [ ] Custom bitrate settings
+
+**Use Cases:** Final export step for completed cut sheets. Critical for delivery.
 
 ---
 
 ### 21. Create Proxy Media ⏸️
-**Test Script:** Create `test-create-proxy.cjs`
+**Test Script:** `test-create-proxy.cjs`
 **Status:** NOT YET TESTED
 
+```bash
+node test-create-proxy.cjs
+```
+
 **Expected Result:**
-- Proxy generation starts
-- Proxy preset applied
-- Proxies created in project
+- Proxy generation queued in Adobe Media Encoder
+- Proxy preset applied correctly
+- Proxies created and attached to project items
+- Toggle proxy mode works
+
+**Proxies to Test:**
+- [ ] Single 4K clip
+- [ ] Batch multiple clips
+- [ ] H.264 Low Resolution Proxy preset
+- [ ] ProRes Proxy preset (if available)
+
+**Use Cases:** Performance editing with 4K/RAW footage. Optional for cut sheet workflows.
 
 ---
 
@@ -622,5 +653,5 @@ After any code changes, rerun:
 ---
 
 **Last Updated:** 2025-12-08
-**Status:** 7/21 operations tested (33%) | 18/21 test scripts created (86%)
-**Next Tests:** Motion operations (critical), warp stabilizer, speed change, transitions, audio
+**Status:** 7/21 operations tested (33%) | 21/21 test scripts created (100%) ✅
+**Next Tests:** Motion operations (critical), transitions, audio levels, export workflow
