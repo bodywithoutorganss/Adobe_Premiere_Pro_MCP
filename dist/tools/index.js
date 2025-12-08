@@ -450,6 +450,11 @@ export class PremiereProTools {
                     return await this.addTransition(args.clipId1, args.clipId2, args.transitionName, args.duration);
                 case 'add_transition_to_clip':
                     return await this.addTransitionToClip(args.clipId, args.transitionName, args.position, args.duration);
+                // Motion and Transform
+                case 'set_motion':
+                    return await this.setMotion(args.clipId, args.position, args.scale, args.rotation, args.anchorPoint);
+                case 'reframe_for_916':
+                    return await this.reframeFor916(args.clipId, args.framePosition);
                 // Audio Operations
                 case 'adjust_audio_levels':
                     return await this.adjustAudioLevels(args.clipId, args.level);
@@ -2804,6 +2809,234 @@ export class PremiereProTools {
             oldSpeed: oldSpeed,
             newSpeed: ${speed},
             maintainAudio: ${maintainAudio}
+          });
+        } catch (e) {
+          return JSON.stringify({
+            success: false,
+            error: e.toString()
+          });
+        }
+      })();
+    `;
+        return await this.bridge.executeScript(script);
+    }
+    async setMotion(clipId, position, scale, rotation, anchorPoint) {
+        const script = `
+      (function() {
+        try {
+          // Helper function to find clip by nodeId
+          function findClipByNodeId(targetNodeId) {
+            for (var s = 0; s < app.project.sequences.numSequences; s++) {
+              var sequence = app.project.sequences[s];
+              for (var t = 0; t < sequence.videoTracks.numTracks; t++) {
+                var track = sequence.videoTracks[t];
+                for (var c = 0; c < track.clips.numItems; c++) {
+                  var clip = track.clips[c];
+                  if (clip.nodeId === targetNodeId) {
+                    return { clip: clip, sequence: sequence };
+                  }
+                }
+              }
+            }
+            return null;
+          }
+
+          var result = findClipByNodeId("${clipId}");
+          if (!result) {
+            return JSON.stringify({
+              success: false,
+              error: "Clip not found"
+            });
+          }
+
+          var clip = result.clip;
+          var components = clip.components;
+          var motionComponent = null;
+
+          // Find Motion component
+          for (var i = 0; i < components.numItems; i++) {
+            if (components[i].displayName === "Motion" || components[i].matchName === "Motion") {
+              motionComponent = components[i];
+              break;
+            }
+          }
+
+          if (!motionComponent) {
+            return JSON.stringify({
+              success: false,
+              error: "Motion component not found on clip"
+            });
+          }
+
+          var properties = motionComponent.properties;
+          var appliedSettings = {};
+
+          // Set Position (properties[0])
+          ${position ? `
+          try {
+            var positionProp = properties[0];
+            positionProp.setValue([${position[0]}, ${position[1]}], true);
+            appliedSettings.position = [${position[0]}, ${position[1]}];
+          } catch (e) {
+            appliedSettings.positionError = e.toString();
+          }
+          ` : ''}
+
+          // Set Scale (properties[1])
+          ${scale !== undefined ? `
+          try {
+            var scaleProp = properties[1];
+            scaleProp.setValue(${scale}, true);
+            appliedSettings.scale = ${scale};
+          } catch (e) {
+            appliedSettings.scaleError = e.toString();
+          }
+          ` : ''}
+
+          // Set Rotation (properties[4])
+          ${rotation !== undefined ? `
+          try {
+            var rotationProp = properties[4];
+            rotationProp.setValue(${rotation}, true);
+            appliedSettings.rotation = ${rotation};
+          } catch (e) {
+            appliedSettings.rotationError = e.toString();
+          }
+          ` : ''}
+
+          // Set Anchor Point (properties[5])
+          ${anchorPoint ? `
+          try {
+            var anchorProp = properties[5];
+            anchorProp.setValue([${anchorPoint[0]}, ${anchorPoint[1]}], true);
+            appliedSettings.anchorPoint = [${anchorPoint[0]}, ${anchorPoint[1]}];
+          } catch (e) {
+            appliedSettings.anchorError = e.toString();
+          }
+          ` : ''}
+
+          return JSON.stringify({
+            success: true,
+            message: "Motion parameters applied successfully",
+            clipId: "${clipId}",
+            appliedSettings: appliedSettings
+          });
+        } catch (e) {
+          return JSON.stringify({
+            success: false,
+            error: e.toString()
+          });
+        }
+      })();
+    `;
+        return await this.bridge.executeScript(script);
+    }
+    async reframeFor916(clipId, framePosition = 'center') {
+        // Calculate position and scale for 9:16 reframing
+        // Assumes source is 16:9 (1920x1080) being reframed to 9:16 (1080x1920)
+        // To fit 16:9 into 9:16, we need to scale up and crop
+        // 16:9 aspect = 1.778, 9:16 aspect = 0.5625
+        // Scale factor: (16/9) / (9/16) = 3.16
+        // We'll use 177.78% scale to fill 9:16 frame with 16:9 content
+        const scale = 177.78; // Fills 9:16 with 16:9 content
+        let position;
+        switch (framePosition) {
+            case 'top':
+                position = [0.5, 0.3]; // Horizontally centered, vertically top third
+                break;
+            case 'bottom':
+                position = [0.5, 0.7]; // Horizontally centered, vertically bottom third
+                break;
+            case 'left':
+                position = [0.3, 0.5]; // Vertically centered, horizontally left third
+                break;
+            case 'right':
+                position = [0.7, 0.5]; // Vertically centered, horizontally right third
+                break;
+            case 'center':
+            default:
+                position = [0.5, 0.5]; // Dead center
+                break;
+        }
+        // Use setMotion to apply the calculated values
+        const script = `
+      (function() {
+        try {
+          // Helper function to find clip by nodeId
+          function findClipByNodeId(targetNodeId) {
+            for (var s = 0; s < app.project.sequences.numSequences; s++) {
+              var sequence = app.project.sequences[s];
+              for (var t = 0; t < sequence.videoTracks.numTracks; t++) {
+                var track = sequence.videoTracks[t];
+                for (var c = 0; c < track.clips.numItems; c++) {
+                  var clip = track.clips[c];
+                  if (clip.nodeId === targetNodeId) {
+                    return { clip: clip, sequence: sequence };
+                  }
+                }
+              }
+            }
+            return null;
+          }
+
+          var result = findClipByNodeId("${clipId}");
+          if (!result) {
+            return JSON.stringify({
+              success: false,
+              error: "Clip not found"
+            });
+          }
+
+          var clip = result.clip;
+          var components = clip.components;
+          var motionComponent = null;
+
+          // Find Motion component
+          for (var i = 0; i < components.numItems; i++) {
+            if (components[i].displayName === "Motion" || components[i].matchName === "Motion") {
+              motionComponent = components[i];
+              break;
+            }
+          }
+
+          if (!motionComponent) {
+            return JSON.stringify({
+              success: false,
+              error: "Motion component not found on clip"
+            });
+          }
+
+          var properties = motionComponent.properties;
+
+          // Set scale to fill 9:16 frame
+          try {
+            var scaleProp = properties[1];
+            scaleProp.setValue(${scale}, true);
+          } catch (e) {
+            return JSON.stringify({
+              success: false,
+              error: "Failed to set scale: " + e.toString()
+            });
+          }
+
+          // Set position for framing
+          try {
+            var positionProp = properties[0];
+            positionProp.setValue([${position[0]}, ${position[1]}], true);
+          } catch (e) {
+            return JSON.stringify({
+              success: false,
+              error: "Failed to set position: " + e.toString()
+            });
+          }
+
+          return JSON.stringify({
+            success: true,
+            message: "Clip reframed for 9:16 vertical video",
+            clipId: "${clipId}",
+            framePosition: "${framePosition}",
+            scale: ${scale},
+            position: [${position[0]}, ${position[1]}]
           });
         } catch (e) {
           return JSON.stringify({

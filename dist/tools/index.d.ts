@@ -54,5 +54,7 @@ export declare class PremiereProTools {
     private autoEditToMusic;
     private stabilizeClip;
     private speedChange;
+    private setMotion;
+    private reframeFor916;
 }
 //# sourceMappingURL=index.d.ts.map

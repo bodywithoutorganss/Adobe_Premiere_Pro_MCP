@@ -252,7 +252,96 @@ node test-speed-change.cjs
 
 ---
 
-### 11. Add Effect ⏸️
+### 11. Set Motion (Position/Scale/Rotation) ⏸️
+**Test Script:** `test-set-motion.cjs`
+**Status:** NOT YET TESTED
+
+```bash
+node test-set-motion.cjs
+```
+
+**Expected Result:**
+- Clip position changed (normalized 0-1 coordinates)
+- Clip scale changed (percentage)
+- Clip rotation changed (degrees)
+- Changes visible in Program Monitor
+
+**Parameters to Test:**
+- [ ] Position: [0.5, 0.5] (center)
+- [ ] Position: [0.3, 0.7] (offset)
+- [ ] Scale: 100% (original size)
+- [ ] Scale: 150% (zoom in)
+- [ ] Scale: 50% (zoom out)
+- [ ] Rotation: 0° (no rotation)
+- [ ] Rotation: 45° (angled)
+- [ ] Rotation: -90° (counter-clockwise)
+- [ ] Anchor Point: [0.5, 0.5] (center pivot)
+
+**Important Notes:**
+- Position values are normalized: 0 = left/top, 1 = right/bottom, 0.5 = center
+- Scale is percentage: 100 = original, 200 = double size
+- Some Premiere versions had setValue() bugs (fixed in 14.0.1+)
+- May be slow, UI updates can lag
+
+---
+
+### 12. Reframe for 9:16 Vertical ⏸️ 🎯 **CRITICAL FOR CUT SHEETS**
+**Test Script:** `test-reframe-916.cjs`
+**Status:** NOT YET TESTED
+
+```bash
+node test-reframe-916.cjs
+```
+
+**Expected Result:**
+- 16:9 clip reframed for 9:16 vertical video
+- Automatic scale calculation (177.78%)
+- Position based on desired framing
+- Fills 9:16 frame completely
+
+**Frame Positions to Test:**
+- [ ] center - Dead center (Instagram/TikTok default)
+- [ ] top - Top third (headroom for captions)
+- [ ] bottom - Bottom third (landscape focus)
+- [ ] left - Left third (subject on left)
+- [ ] right - Right third (subject on right)
+
+**Use Cases:**
+- Instagram Reels (1080x1920)
+- TikTok (1080x1920)
+- YouTube Shorts (1080x1920)
+- Stories (1080x1920)
+
+**Testing Tips:**
+- Create a 1080x1920 sequence to see final result
+- Test with different aspect ratio sources
+- Verify no black bars appear
+- Check that important content isn't cropped
+
+---
+
+### 13. Motion Effect Properties (Debug) ⏸️
+**Test Script:** `test-motion-effect.cjs`
+**Status:** NOT YET TESTED
+
+```bash
+node test-motion-effect.cjs
+```
+
+**Expected Result:**
+- Lists all Motion component properties
+- Shows property indices and names
+- Displays current values
+- Confirms API access works
+
+**Purpose:**
+- Debug Motion component access
+- Verify property indices match documentation
+- Check Premiere Pro version compatibility
+
+---
+
+### 14. Add Effect ⏸️
 **Test Script:** Create `test-add-effect.cjs`
 **Status:** NOT YET TESTED
 
@@ -270,7 +359,7 @@ node test-speed-change.cjs
 
 ---
 
-### 12. Add Transition ⏸️
+### 15. Add Transition ⏸️
 **Test Script:** Create `test-add-transition.cjs`
 **Status:** NOT YET TESTED
 
@@ -289,7 +378,7 @@ node test-speed-change.cjs
 
 ## ✂️ Editing Operations
 
-### 13. Trim Clip ⏸️
+### 16. Trim Clip ⏸️
 **Test Script:** `test-trim-clip.cjs`
 **Status:** NOT YET TESTED
 
@@ -311,7 +400,7 @@ node test-trim-clip.cjs
 
 ---
 
-### 14. Split Clip ⏸️
+### 17. Split Clip ⏸️
 **Test Script:** `test-split-clip.cjs`
 **Status:** NOT YET TESTED
 
@@ -335,7 +424,7 @@ node test-split-clip.cjs
 
 ## 🔊 Audio Operations
 
-### 15. Adjust Audio Level ⏸️
+### 18. Adjust Audio Level ⏸️
 **Test Script:** Create `test-adjust-audio.cjs`
 **Status:** NOT YET TESTED
 
@@ -352,7 +441,7 @@ node test-split-clip.cjs
 
 ---
 
-### 16. Fade Audio ⏸️
+### 19. Fade Audio ⏸️
 **Test Script:** Create `test-fade-audio.cjs`
 **Status:** NOT YET TESTED
 
@@ -370,7 +459,7 @@ node test-split-clip.cjs
 
 ## 🎬 Advanced Operations
 
-### 17. Export Sequence ⏸️
+### 20. Export Sequence ⏸️
 **Test Script:** Create `test-export.cjs`
 **Status:** NOT YET TESTED
 
@@ -381,7 +470,7 @@ node test-split-clip.cjs
 
 ---
 
-### 18. Create Proxy Media ⏸️
+### 21. Create Proxy Media ⏸️
 **Test Script:** Create `test-create-proxy.cjs`
 **Status:** NOT YET TESTED
 
@@ -450,10 +539,11 @@ After any code changes, rerun:
 |----------|-------|--------|---------|-----------|
 | Core Operations | 6 | 6 | 0 | 100% ✅ |
 | Effects & Color | 6 | 1 | 5 | 17% 🟡 |
+| **Motion & Transform** | **3** | **0** | **3** | **0% 🔴** |
 | Editing Operations | 2 | 0 | 2 | 0% 🔴 |
 | Audio Operations | 2 | 0 | 2 | 0% 🔴 |
 | Advanced Operations | 2 | 0 | 2 | 0% 🔴 |
-| **TOTAL** | **18** | **7** | **11** | **39%** |
+| **TOTAL** | **21** | **7** | **14** | **33%** |
 
 ---
 
@@ -470,6 +560,9 @@ After any code changes, rerun:
 
 2. **P1 - High** (Core features)
    - [x] Color correction
+   - [ ] **Set Motion** (position/scale/rotation) 🎯
+   - [ ] **Reframe for 9:16** (vertical video) 🎯 CRITICAL
+   - [ ] Motion Effect Properties (debug)
    - [ ] Warp stabilizer
    - [ ] Speed change
    - [ ] Trim clip
