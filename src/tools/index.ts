@@ -1056,6 +1056,39 @@ export class PremiereProTools {
           return null;
         }
 
+        // Helper: Find all linked clips (same projectItem and start time)
+        function findLinkedClips(targetClip, sequence) {
+          var linkedClips = [];
+          var projectItemPath = targetClip.projectItem ? targetClip.projectItem.treePath : null;
+          var startTime = targetClip.start.seconds;
+
+          // Search video tracks
+          for (var t = 0; t < sequence.videoTracks.numTracks; t++) {
+            for (var c = 0; c < sequence.videoTracks[t].clips.numItems; c++) {
+              var clip = sequence.videoTracks[t].clips[c];
+              if (clip.projectItem &&
+                  clip.projectItem.treePath === projectItemPath &&
+                  Math.abs(clip.start.seconds - startTime) < 0.001) {
+                linkedClips.push(clip);
+              }
+            }
+          }
+
+          // Search audio tracks
+          for (var t = 0; t < sequence.audioTracks.numTracks; t++) {
+            for (var c = 0; c < sequence.audioTracks[t].clips.numItems; c++) {
+              var clip = sequence.audioTracks[t].clips[c];
+              if (clip.projectItem &&
+                  clip.projectItem.treePath === projectItemPath &&
+                  Math.abs(clip.start.seconds - startTime) < 0.001) {
+                linkedClips.push(clip);
+              }
+            }
+          }
+
+          return linkedClips;
+        }
+
         var result = findClipByNodeId("${clipId}");
         if (!result) {
           JSON.stringify({
@@ -1068,15 +1101,21 @@ export class PremiereProTools {
         var clipName = result.clip.name;
         var ripple = "${deleteMode}" === "ripple" ? 1 : 0;
 
-        // Use TrackItem.remove(inRipple, inAlignToVideo)
-        result.clip.remove(ripple, 0);
+        // Find all linked clips (video + audio)
+        var linkedClips = findLinkedClips(result.clip, result.sequence);
+
+        // Remove all linked clips
+        for (var i = 0; i < linkedClips.length; i++) {
+          linkedClips[i].remove(ripple, 0);
+        }
 
         JSON.stringify({
           success: true,
-          message: "Clip removed from timeline",
+          message: "Clip(s) removed from timeline",
           clipId: "${clipId}",
           clipName: clipName,
-          deleteMode: "${deleteMode}"
+          deleteMode: "${deleteMode}",
+          linkedClipsRemoved: linkedClips.length
         });
       } catch (e) {
         JSON.stringify({
@@ -1085,7 +1124,7 @@ export class PremiereProTools {
         });
       }
     `;
-    
+
     return await this.bridge.executeScript(script);
   }
 
@@ -1116,6 +1155,39 @@ export class PremiereProTools {
           return null;
         }
 
+        // Helper: Find all linked clips (same projectItem and start time)
+        function findLinkedClips(targetClip, sequence) {
+          var linkedClips = [];
+          var projectItemPath = targetClip.projectItem ? targetClip.projectItem.treePath : null;
+          var startTime = targetClip.start.seconds;
+
+          // Search video tracks
+          for (var t = 0; t < sequence.videoTracks.numTracks; t++) {
+            for (var c = 0; c < sequence.videoTracks[t].clips.numItems; c++) {
+              var clip = sequence.videoTracks[t].clips[c];
+              if (clip.projectItem &&
+                  clip.projectItem.treePath === projectItemPath &&
+                  Math.abs(clip.start.seconds - startTime) < 0.001) {
+                linkedClips.push(clip);
+              }
+            }
+          }
+
+          // Search audio tracks
+          for (var t = 0; t < sequence.audioTracks.numTracks; t++) {
+            for (var c = 0; c < sequence.audioTracks[t].clips.numItems; c++) {
+              var clip = sequence.audioTracks[t].clips[c];
+              if (clip.projectItem &&
+                  clip.projectItem.treePath === projectItemPath &&
+                  Math.abs(clip.start.seconds - startTime) < 0.001) {
+                linkedClips.push(clip);
+              }
+            }
+          }
+
+          return linkedClips;
+        }
+
         var result = findClipByNodeId("${clipId}");
         if (!result) {
           JSON.stringify({ success: false, error: "Clip not found" });
@@ -1124,12 +1196,17 @@ export class PremiereProTools {
 
         var oldTime = result.clip.start.seconds;
 
+        // Find all linked clips (video + audio)
+        var linkedClips = findLinkedClips(result.clip, result.sequence);
+
         // Create Time object for new position
         var newInPoint = new Time();
         newInPoint.seconds = ${newTime};
 
-        // Use TrackItem.move(newInPoint) to move clip
-        result.clip.move(newInPoint);
+        // Move all linked clips together
+        for (var i = 0; i < linkedClips.length; i++) {
+          linkedClips[i].move(newInPoint);
+        }
 
         // Note: Moving between tracks requires remove + insert, which is complex
         // and not reliably supported. Skipping track change for now.
@@ -1139,12 +1216,13 @@ export class PremiereProTools {
 
         JSON.stringify({
           success: true,
-          message: "Clip moved successfully",
+          message: "Clip(s) moved successfully",
           clipId: "${clipId}",
           oldTime: oldTime,
           newTime: ${newTime},
           trackIndex: result.trackIndex,
-          trackChangeRequested: ${newTrackIndex !== undefined}
+          trackChangeRequested: ${newTrackIndex !== undefined},
+          linkedClipsMoved: linkedClips.length
         });
       } catch (e) {
         JSON.stringify({
@@ -2007,6 +2085,184 @@ export class PremiereProTools {
     return await this.bridge.executeScript(script);
   }
 
+  // Color Correction Implementation
+  private async colorCorrect(clipId: string, params: {
+    brightness?: number,
+    contrast?: number,
+    saturation?: number,
+    hue?: number,
+    temperature?: number,
+    tint?: number
+  }): Promise<any> {
+    const script = `
+      try {
+        // Helper function to find clip by nodeId
+        function findClipByNodeId(targetNodeId) {
+          for (var s = 0; s < app.project.sequences.numSequences; s++) {
+            var sequence = app.project.sequences[s];
+
+            for (var t = 0; t < sequence.videoTracks.numTracks; t++) {
+              var track = sequence.videoTracks[t];
+              for (var c = 0; c < track.clips.numItems; c++) {
+                var clip = track.clips[c];
+                if (clip.nodeId === targetNodeId) {
+                  return {
+                    clip: clip,
+                    sequence: sequence,
+                    trackIndex: t
+                  };
+                }
+              }
+            }
+          }
+          return null;
+        }
+
+        var result = findClipByNodeId("${clipId}");
+        if (!result) {
+          JSON.stringify({
+            success: false,
+            error: "Clip not found"
+          });
+          return;
+        }
+
+        // Enable QE DOM for effect access
+        app.enableQE();
+        var qeProject = qe.project;
+        var qeSequence = qeProject.getActiveSequence();
+        var qeTrack = qeSequence.getVideoTrackAt(result.trackIndex);
+
+        // Find the QE clip by matching name
+        var qeClip = null;
+        for (var i = 0; i < qeTrack.numItems; i++) {
+          if (qeTrack.getItemAt(i).name === result.clip.name) {
+            qeClip = qeTrack.getItemAt(i);
+            break;
+          }
+        }
+
+        if (!qeClip) {
+          JSON.stringify({
+            success: false,
+            error: "Could not find QE clip"
+          });
+          return;
+        }
+
+        // Get Lumetri Color effect
+        var lumetriEffect = qeProject.getVideoEffectByName("Lumetri Color");
+        if (!lumetriEffect) {
+          JSON.stringify({
+            success: false,
+            error: "Lumetri Color effect not available"
+          });
+          return;
+        }
+
+        // Check if Lumetri is already applied
+        var lumetriComponent = null;
+        for (var i = 0; i < result.clip.components.numItems; i++) {
+          var comp = result.clip.components[i];
+          if (comp.displayName === "Lumetri Color") {
+            lumetriComponent = comp;
+            break;
+          }
+        }
+
+        // If not applied, add it
+        if (!lumetriComponent) {
+          qeClip.addVideoEffect(lumetriEffect);
+          // Re-fetch the component after adding
+          for (var i = 0; i < result.clip.components.numItems; i++) {
+            var comp = result.clip.components[i];
+            if (comp.displayName === "Lumetri Color") {
+              lumetriComponent = comp;
+              break;
+            }
+          }
+        }
+
+        if (!lumetriComponent) {
+          JSON.stringify({
+            success: false,
+            error: "Failed to apply Lumetri Color effect"
+          });
+          return;
+        }
+
+        var appliedParams = [];
+
+        // Apply parameters - Note: property names may vary
+        // These are approximate - actual property names need verification
+        ${params.brightness !== undefined ? `
+        try {
+          var brightnessParam = lumetriComponent.properties.getParamForDisplayName("Exposure");
+          if (brightnessParam) {
+            brightnessParam.setValue(${params.brightness} / 100);
+            appliedParams.push("brightness");
+          }
+        } catch (e) {}
+        ` : ''}
+
+        ${params.contrast !== undefined ? `
+        try {
+          var contrastParam = lumetriComponent.properties.getParamForDisplayName("Contrast");
+          if (contrastParam) {
+            contrastParam.setValue(${params.contrast});
+            appliedParams.push("contrast");
+          }
+        } catch (e) {}
+        ` : ''}
+
+        ${params.saturation !== undefined ? `
+        try {
+          var saturationParam = lumetriComponent.properties.getParamForDisplayName("Saturation");
+          if (saturationParam) {
+            saturationParam.setValue(${params.saturation});
+            appliedParams.push("saturation");
+          }
+        } catch (e) {}
+        ` : ''}
+
+        ${params.temperature !== undefined ? `
+        try {
+          var tempParam = lumetriComponent.properties.getParamForDisplayName("Temperature");
+          if (tempParam) {
+            tempParam.setValue(${params.temperature});
+            appliedParams.push("temperature");
+          }
+        } catch (e) {}
+        ` : ''}
+
+        ${params.tint !== undefined ? `
+        try {
+          var tintParam = lumetriComponent.properties.getParamForDisplayName("Tint");
+          if (tintParam) {
+            tintParam.setValue(${params.tint});
+            appliedParams.push("tint");
+          }
+        } catch (e) {}
+        ` : ''}
+
+        JSON.stringify({
+          success: true,
+          message: "Color correction applied successfully",
+          clipId: "${clipId}",
+          appliedParams: appliedParams
+        });
+
+      } catch (e) {
+        JSON.stringify({
+          success: false,
+          error: e.toString()
+        });
+      }
+    `;
+
+    return await this.bridge.executeScript(script);
+  }
+
   // Text and Graphics Implementation
   private async addTextOverlay(args: any): Promise<any> {
     const script = `
@@ -2145,53 +2401,6 @@ export class PremiereProTools {
     return await this.bridge.executeScript(script);
   }
 
-  // Color Correction Implementation
-  private async colorCorrect(clipId: string, adjustments: any): Promise<any> {
-    const script = `
-      try {
-        var clip = app.project.getClipByID("${clipId}");
-        if (!clip) {
-          JSON.stringify({
-            success: false,
-            error: "Clip not found"
-          });
-          return;
-        }
-        
-        var colorCorrection = clip.addEffect("Lumetri Color");
-        if (!colorCorrection) {
-          JSON.stringify({
-            success: false,
-            error: "Failed to add color correction effect"
-          });
-          return;
-        }
-        
-        ${adjustments.brightness !== undefined ? `try { colorCorrection.properties["Brightness"].setValue(${adjustments.brightness}); } catch (e) {}` : ''}
-        ${adjustments.contrast !== undefined ? `try { colorCorrection.properties["Contrast"].setValue(${adjustments.contrast}); } catch (e) {}` : ''}
-        ${adjustments.saturation !== undefined ? `try { colorCorrection.properties["Saturation"].setValue(${adjustments.saturation}); } catch (e) {}` : ''}
-        ${adjustments.hue !== undefined ? `try { colorCorrection.properties["Hue"].setValue(${adjustments.hue}); } catch (e) {}` : ''}
-        ${adjustments.highlights !== undefined ? `try { colorCorrection.properties["Highlights"].setValue(${adjustments.highlights}); } catch (e) {}` : ''}
-        ${adjustments.shadows !== undefined ? `try { colorCorrection.properties["Shadows"].setValue(${adjustments.shadows}); } catch (e) {}` : ''}
-        ${adjustments.temperature !== undefined ? `try { colorCorrection.properties["Temperature"].setValue(${adjustments.temperature}); } catch (e) {}` : ''}
-        ${adjustments.tint !== undefined ? `try { colorCorrection.properties["Tint"].setValue(${adjustments.tint}); } catch (e) {}` : ''}
-        
-        JSON.stringify({
-          success: true,
-          message: "Color correction applied successfully",
-          clipId: "${clipId}",
-          adjustments: ${JSON.stringify(adjustments)}
-        });
-      } catch (e) {
-        JSON.stringify({
-          success: false,
-          error: e.toString()
-        });
-      }
-    `;
-    
-    return await this.bridge.executeScript(script);
-  }
 
   private async applyLut(clipId: string, lutPath: string, intensity = 100): Promise<any> {
     const script = `
@@ -2432,38 +2641,117 @@ export class PremiereProTools {
   private async stabilizeClip(clipId: string, method = 'warp', smoothness = 50): Promise<any> {
     const script = `
       try {
-        var clip = app.project.getClipByID("${clipId}");
-        if (!clip) {
+        // Helper function to find clip by nodeId
+        function findClipByNodeId(targetNodeId) {
+          for (var s = 0; s < app.project.sequences.numSequences; s++) {
+            var sequence = app.project.sequences[s];
+            for (var t = 0; t < sequence.videoTracks.numTracks; t++) {
+              var track = sequence.videoTracks[t];
+              for (var c = 0; c < track.clips.numItems; c++) {
+                var clip = track.clips[c];
+                if (clip.nodeId === targetNodeId) {
+                  return {
+                    clip: clip,
+                    sequence: sequence,
+                    trackIndex: t
+                  };
+                }
+              }
+            }
+          }
+          return null;
+        }
+
+        var result = findClipByNodeId("${clipId}");
+        if (!result) {
           JSON.stringify({
             success: false,
             error: "Clip not found"
           });
           return;
         }
-        
-        var stabilizationEffect = clip.addEffect("Warp Stabilizer");
-        if (!stabilizationEffect) {
+
+        // Enable QE DOM for effect access
+        app.enableQE();
+        var qeProject = qe.project;
+        var qeSequence = qeProject.getActiveSequence();
+        var qeTrack = qeSequence.getVideoTrackAt(result.trackIndex);
+
+        // Find the QE clip by matching name
+        var qeClip = null;
+        for (var i = 0; i < qeTrack.numItems; i++) {
+          if (qeTrack.getItemAt(i).name === result.clip.name) {
+            qeClip = qeTrack.getItemAt(i);
+            break;
+          }
+        }
+
+        if (!qeClip) {
           JSON.stringify({
             success: false,
-            error: "Failed to add stabilization effect"
+            error: "Could not find QE clip"
           });
           return;
         }
-        
-        // Configure stabilization settings
-        try {
-          stabilizationEffect.properties["Smoothness"].setValue(${smoothness / 100});
-          stabilizationEffect.properties["Method"].setValue("${method}");
-        } catch (e) {
-          // Some properties might not be available
+
+        // Get Warp Stabilizer effect
+        var stabilizerEffect = qeProject.getVideoEffectByName("Warp Stabilizer");
+        if (!stabilizerEffect) {
+          JSON.stringify({
+            success: false,
+            error: "Warp Stabilizer effect not available"
+          });
+          return;
         }
-        
+
+        // Check if stabilizer is already applied
+        var stabilizerComponent = null;
+        for (var i = 0; i < result.clip.components.numItems; i++) {
+          var comp = result.clip.components[i];
+          if (comp.displayName === "Warp Stabilizer") {
+            stabilizerComponent = comp;
+            break;
+          }
+        }
+
+        // If not applied, add it
+        if (!stabilizerComponent) {
+          qeClip.addVideoEffect(stabilizerEffect);
+          // Re-fetch the component after adding
+          for (var i = 0; i < result.clip.components.numItems; i++) {
+            var comp = result.clip.components[i];
+            if (comp.displayName === "Warp Stabilizer") {
+              stabilizerComponent = comp;
+              break;
+            }
+          }
+        }
+
+        if (!stabilizerComponent) {
+          JSON.stringify({
+            success: false,
+            error: "Failed to apply Warp Stabilizer effect"
+          });
+          return;
+        }
+
+        // Configure stabilization settings
+        var appliedSettings = [];
+        try {
+          var smoothnessParam = stabilizerComponent.properties.getParamForDisplayName("Smoothness");
+          if (smoothnessParam) {
+            smoothnessParam.setValue(${smoothness});
+            appliedSettings.push("smoothness");
+          }
+        } catch (e) {}
+
         JSON.stringify({
           success: true,
-          message: "Video stabilization applied successfully",
+          message: "Warp Stabilizer applied successfully",
           clipId: "${clipId}",
           method: "${method}",
-          smoothness: ${smoothness}
+          smoothness: ${smoothness},
+          appliedSettings: appliedSettings
         });
       } catch (e) {
         JSON.stringify({
@@ -2472,7 +2760,7 @@ export class PremiereProTools {
         });
       }
     `;
-    
+
     return await this.bridge.executeScript(script);
   }
 

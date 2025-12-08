@@ -43,9 +43,9 @@ export declare class PremiereProTools {
     private adjustAudioLevels;
     private addAudioKeyframes;
     private muteTrack;
+    private colorCorrect;
     private addTextOverlay;
     private addShape;
-    private colorCorrect;
     private applyLut;
     private exportSequence;
     private exportFrame;

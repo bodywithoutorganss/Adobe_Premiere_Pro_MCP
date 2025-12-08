@@ -9,8 +9,8 @@ const TEST_TIMEOUT = 15000;
 async function testMoveClip() {
   console.log('🧪 Testing move_clip Operation\n');
 
-  const clipId = '000f4397'; // Clip at 1392s
-  const newTime = 500; // Move to 500 seconds
+  const clipId = '000f439b'; // Linked clip at 1312.06s
+  const newTime = 50; // Move to 50 seconds
 
   console.log(`Clip ID: ${clipId}`);
   console.log(`New Position: ${newTime} seconds\n`);
@@ -49,6 +49,39 @@ async function testMoveClip() {
         return null;
       }
 
+      // Helper: Find all linked clips (same projectItem and start time)
+      function findLinkedClips(targetClip, sequence) {
+        var linkedClips = [];
+        var projectItemPath = targetClip.projectItem ? targetClip.projectItem.treePath : null;
+        var startTime = targetClip.start.seconds;
+
+        // Search video tracks
+        for (var t = 0; t < sequence.videoTracks.numTracks; t++) {
+          for (var c = 0; c < sequence.videoTracks[t].clips.numItems; c++) {
+            var clip = sequence.videoTracks[t].clips[c];
+            if (clip.projectItem &&
+                clip.projectItem.treePath === projectItemPath &&
+                Math.abs(clip.start.seconds - startTime) < 0.001) {
+              linkedClips.push(clip);
+            }
+          }
+        }
+
+        // Search audio tracks
+        for (var t = 0; t < sequence.audioTracks.numTracks; t++) {
+          for (var c = 0; c < sequence.audioTracks[t].clips.numItems; c++) {
+            var clip = sequence.audioTracks[t].clips[c];
+            if (clip.projectItem &&
+                clip.projectItem.treePath === projectItemPath &&
+                Math.abs(clip.start.seconds - startTime) < 0.001) {
+              linkedClips.push(clip);
+            }
+          }
+        }
+
+        return linkedClips;
+      }
+
       var result = findClipByNodeId("${clipId}");
       if (!result) {
         JSON.stringify({ success: false, error: "Clip not found" });
@@ -57,19 +90,25 @@ async function testMoveClip() {
       var clipName = result.clip.name;
       var oldStart = result.clip.start.seconds;
 
+      // Find all linked clips (video + audio)
+      var linkedClips = findLinkedClips(result.clip, result.sequence);
+
       // Create Time object for new position
-      var newInPoint = result.clip.start;
+      var newInPoint = new Time();
       newInPoint.seconds = ${newTime};
 
-      // Use TrackItem.move() method
-      result.clip.move(newInPoint);
+      // Move all linked clips together
+      for (var i = 0; i < linkedClips.length; i++) {
+        linkedClips[i].move(newInPoint);
+      }
 
       JSON.stringify({
         success: true,
-        message: "Clip moved successfully!",
+        message: "Clip(s) moved successfully!",
         clipName: clipName,
         oldPosition: oldStart,
-        newPosition: ${newTime}
+        newPosition: ${newTime},
+        linkedClipsMoved: linkedClips.length
       });
     } catch (e) {
       JSON.stringify({
@@ -112,8 +151,9 @@ async function testMoveClip() {
       console.log('✅ Response received:\n');
 
       if (response.success) {
-        console.log('🎉 SUCCESS! Clip moved on timeline!');
+        console.log('🎉 SUCCESS! Clip(s) moved on timeline!');
         console.log(`   Clip: ${response.clipName}`);
+        console.log(`   Linked clips moved: ${response.linkedClipsMoved}`);
         console.log(`   From: ${response.oldPosition}s → To: ${response.newPosition}s`);
         console.log('\n✅ Check Premiere Pro - clip should be at new position!');
         return 0;

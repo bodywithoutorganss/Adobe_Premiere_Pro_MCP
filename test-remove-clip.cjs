@@ -9,7 +9,7 @@ const TEST_TIMEOUT = 15000;
 async function testRemoveClip() {
   console.log('🧪 Testing remove_from_timeline Operation\n');
 
-  const clipId = '000f43ef'; // First clip on timeline
+  const clipId = '000f439b'; // Linked clip we just moved
   const deleteMode = 'ripple'; // Close the gap
 
   console.log(`Clip ID: ${clipId}`);
@@ -19,7 +19,7 @@ async function testRemoveClip() {
   const commandFile = path.join(BRIDGE_DIR, `command-${commandId}.json`);
   const responseFile = path.join(BRIDGE_DIR, `response-${commandId}.json`);
 
-  // This is the EXACT script from our fixed remove_from_timeline
+  // Updated script with linked clip handling
   const script = `
     try {
       // Helper function to find clip by nodeId
@@ -62,6 +62,39 @@ async function testRemoveClip() {
         return null;
       }
 
+      // Helper: Find all linked clips (same projectItem and start time)
+      function findLinkedClips(targetClip, sequence) {
+        var linkedClips = [];
+        var projectItemPath = targetClip.projectItem ? targetClip.projectItem.treePath : null;
+        var startTime = targetClip.start.seconds;
+
+        // Search video tracks
+        for (var t = 0; t < sequence.videoTracks.numTracks; t++) {
+          for (var c = 0; c < sequence.videoTracks[t].clips.numItems; c++) {
+            var clip = sequence.videoTracks[t].clips[c];
+            if (clip.projectItem &&
+                clip.projectItem.treePath === projectItemPath &&
+                Math.abs(clip.start.seconds - startTime) < 0.001) {
+              linkedClips.push(clip);
+            }
+          }
+        }
+
+        // Search audio tracks
+        for (var t = 0; t < sequence.audioTracks.numTracks; t++) {
+          for (var c = 0; c < sequence.audioTracks[t].clips.numItems; c++) {
+            var clip = sequence.audioTracks[t].clips[c];
+            if (clip.projectItem &&
+                clip.projectItem.treePath === projectItemPath &&
+                Math.abs(clip.start.seconds - startTime) < 0.001) {
+              linkedClips.push(clip);
+            }
+          }
+        }
+
+        return linkedClips;
+      }
+
       var result = findClipByNodeId("${clipId}");
 
       if (!result) {
@@ -73,16 +106,24 @@ async function testRemoveClip() {
 
       var clipName = result.clip.name;
 
+      // Find all linked clips (video + audio)
+      var linkedClips = findLinkedClips(result.clip, result.sequence);
+
       // Use TrackItem.remove() method
       // Parameters: inRipple (1 = ripple, 0 = lift), inAlignToVideo
       var ripple = "${deleteMode}" === "ripple" ? 1 : 0;
-      result.clip.remove(ripple, 0);
+
+      // Remove all linked clips
+      for (var i = 0; i < linkedClips.length; i++) {
+        linkedClips[i].remove(ripple, 0);
+      }
 
       JSON.stringify({
         success: true,
-        message: "Clip removed successfully!",
+        message: "Clip(s) removed successfully!",
         clipName: clipName,
-        deleteMode: "${deleteMode}"
+        deleteMode: "${deleteMode}",
+        linkedClipsRemoved: linkedClips.length
       });
     } catch (e) {
       JSON.stringify({
@@ -125,10 +166,11 @@ async function testRemoveClip() {
       console.log('✅ Response received:\n');
 
       if (response.success) {
-        console.log('🎉 SUCCESS! Clip removed from timeline!');
+        console.log('🎉 SUCCESS! Clip(s) removed from timeline!');
         console.log(`   Clip: ${response.clipName}`);
         console.log(`   Mode: ${response.deleteMode}`);
-        console.log('\n✅ Check Premiere Pro - clip should be gone and gap closed!');
+        console.log(`   Linked clips removed: ${response.linkedClipsRemoved}`);
+        console.log('\n✅ Check Premiere Pro - all linked clips should be gone and gap closed!');
         return 0;
       } else {
         console.log('❌ Error:', response.error);

@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "WebSearch",
+      "Read(//Users/DaytonThompson/Library/Application Support/Claude/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
