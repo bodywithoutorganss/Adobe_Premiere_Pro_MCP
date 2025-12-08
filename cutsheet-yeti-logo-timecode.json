@@ -1,0 +1,245 @@
+{
+  "project": "DW_EP032_YetiLogo",
+  "sequence": {
+    "name": "DW_EP032_YetiLogo_9x16_v01",
+    "format": "9:16",
+    "resolution": "1080x1920",
+    "frameRate": 30,
+    "duration": "00:00:50"
+  },
+  "shots": [
+    {
+      "id": "shot1",
+      "description": "Golden hour ranch establishing shot",
+      "clipName": "ranch_golden_hour",
+      "track": 1,
+      "timelineStart": "00:00:00",
+      "timelineEnd": "00:00:04",
+      "sourceIn": null,
+      "sourceOut": null,
+      "operations": [
+        {
+          "type": "reframe_for_916",
+          "framePosition": "center"
+        },
+        {
+          "type": "color_correct",
+          "params": {
+            "temperature": 25,
+            "saturation": 15,
+            "brightness": 5
+          }
+        }
+      ]
+    },
+    {
+      "id": "shot2",
+      "description": "Ben speaking - intro to story",
+      "clipName": "episode_032_ben",
+      "track": 1,
+      "timelineStart": "00:00:04",
+      "timelineEnd": "00:00:15",
+      "sourceIn": "00:15:00",
+      "sourceOut": "00:15:11",
+      "operations": [
+        {
+          "type": "reframe_for_916",
+          "framePosition": "center"
+        },
+        {
+          "type": "color_correct",
+          "params": {
+            "brightness": 3,
+            "contrast": 5
+          }
+        }
+      ]
+    },
+    {
+      "id": "shot3a",
+      "description": "B-roll: Cattle feeding",
+      "clipName": "cattle_feeding",
+      "track": 1,
+      "timelineStart": "00:00:15",
+      "timelineEnd": "00:00:17",
+      "sourceIn": "00:00:00",
+      "sourceOut": "00:00:02",
+      "operations": [
+        {
+          "type": "reframe_for_916",
+          "framePosition": "center"
+        },
+        {
+          "type": "color_correct",
+          "params": {
+            "temperature": 25,
+            "saturation": 15
+          }
+        }
+      ]
+    },
+    {
+      "id": "shot3b",
+      "description": "B-roll: Truck bed with gear",
+      "clipName": "truck_bed",
+      "track": 1,
+      "timelineStart": "00:00:17",
+      "timelineEnd": "00:00:19",
+      "sourceIn": "00:00:00",
+      "sourceOut": "00:00:02",
+      "operations": [
+        {
+          "type": "reframe_for_916",
+          "framePosition": "center"
+        },
+        {
+          "type": "color_correct",
+          "params": {
+            "temperature": 25,
+            "saturation": 15
+          }
+        }
+      ]
+    },
+    {
+      "id": "shot3c",
+      "description": "B-roll: Yeti tumbler logo closeup",
+      "clipName": "yeti_tumbler_logo",
+      "track": 1,
+      "timelineStart": "00:00:19",
+      "timelineEnd": "00:00:25",
+      "sourceIn": "00:00:00",
+      "sourceOut": "00:00:06",
+      "operations": [
+        {
+          "type": "reframe_for_916",
+          "framePosition": "center"
+        },
+        {
+          "type": "set_motion",
+          "params": {
+            "position": [0.5, 0.5],
+            "scale": 120,
+            "rotation": 0
+          },
+          "description": "Slight zoom for emphasis"
+        },
+        {
+          "type": "color_correct",
+          "params": {
+            "temperature": 25,
+            "saturation": 15
+          }
+        }
+      ]
+    },
+    {
+      "id": "shot5",
+      "description": "Ben continues - the rejection",
+      "clipName": "episode_032_ben",
+      "track": 1,
+      "timelineStart": "00:00:28",
+      "timelineEnd": "00:00:35",
+      "sourceIn": "00:15:15",
+      "sourceOut": "00:15:22",
+      "operations": [
+        {
+          "type": "reframe_for_916",
+          "framePosition": "center"
+        }
+      ]
+    },
+    {
+      "id": "shot6",
+      "description": "Scott reaction - quick cut",
+      "clipName": "episode_032_scott",
+      "track": 1,
+      "timelineStart": "00:00:35",
+      "timelineEnd": "00:00:40",
+      "sourceIn": "00:16:45",
+      "sourceOut": "00:16:50",
+      "operations": [
+        {
+          "type": "reframe_for_916",
+          "framePosition": "center"
+        }
+      ]
+    },
+    {
+      "id": "shot7",
+      "description": "Scott explains - Yeti's philosophy",
+      "clipName": "episode_032_scott",
+      "track": 1,
+      "timelineStart": "00:00:40",
+      "timelineEnd": "00:00:50",
+      "sourceIn": "00:16:50",
+      "sourceOut": "00:17:00",
+      "operations": [
+        {
+          "type": "reframe_for_916",
+          "framePosition": "center"
+        }
+      ]
+    }
+  ],
+  "audio": [
+    {
+      "id": "music_bed",
+      "description": "Contemplative acoustic music bed",
+      "clipName": "contemplative_acoustic",
+      "track": 2,
+      "timelineStart": "00:00:00",
+      "timelineEnd": "00:00:50",
+      "sourceIn": "00:00:00",
+      "sourceOut": "00:00:50",
+      "operations": [
+        {
+          "type": "adjust_audio_level",
+          "params": {
+            "level": -20
+          },
+          "description": "Duck under dialogue"
+        },
+        {
+          "type": "fade_audio",
+          "params": {
+            "fadeType": "in",
+            "duration": 1.0
+          },
+          "description": "1 second fade in at start"
+        },
+        {
+          "type": "fade_audio",
+          "params": {
+            "fadeType": "out",
+            "duration": 2.0
+          },
+          "description": "2 second fade out at end"
+        }
+      ]
+    }
+  ],
+  "export": {
+    "outputPath": "/output/DW_EP032_YetiLogo_9x16_v01.mp4",
+    "format": "H.264",
+    "resolution": "1080x1920",
+    "frameRate": 30,
+    "bitrate": 12,
+    "description": "Final 9:16 vertical video for Instagram/TikTok"
+  },
+  "metadata": {
+    "title": "The Yeti Logo That Never Made the Cut",
+    "episode": "032",
+    "podcast": "Doc Walks",
+    "format": "9:16 vertical",
+    "platform": "Instagram Reels, TikTok, Stories",
+    "estimatedAssemblyTime": "2-5 minutes (automated)",
+    "manualAssemblyTime": "45-60 minutes",
+    "timeSavings": "~85%"
+  },
+  "notes": {
+    "textGraphics": "Out of scope - handle separately",
+    "audioProcessing": "Dialogue cleanup done in pre-processing",
+    "coverage": "90% automated (only text overlays missing)"
+  }
+}
