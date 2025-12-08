@@ -571,7 +571,7 @@ export class PremiereProTools {
           }
         }
         
-        JSON.stringify({
+        return JSON.stringify({
           success: true,
           items: items,
           bins: ${includeBins} ? bins : [],
@@ -579,7 +579,7 @@ export class PremiereProTools {
           totalBins: bins.length
         });
       } catch (e) {
-        JSON.stringify({
+        return JSON.stringify({
           success: false,
           error: e.toString()
         });
@@ -610,13 +610,13 @@ export class PremiereProTools {
           sequences.push(seqData);
         }
 
-        JSON.stringify({
+        return JSON.stringify({
           success: true,
           sequences: sequences,
           count: sequences.length
         });
       } catch (e) {
-        JSON.stringify({
+        return JSON.stringify({
           success: false,
           error: e.toString()
         });
@@ -693,7 +693,7 @@ export class PremiereProTools {
           });
         }
         
-        JSON.stringify({
+        return JSON.stringify({
           success: true,
           sequenceId: "${sequenceId}",
           sequenceName: sequence.name,
@@ -703,7 +703,7 @@ export class PremiereProTools {
           totalAudioTracks: audioTracks.length
         });
       } catch (e) {
-        JSON.stringify({
+        return JSON.stringify({
           success: false,
           error: e.toString()
         });
@@ -717,7 +717,7 @@ export class PremiereProTools {
     const script = `
       try {
         var project = app.project;
-        JSON.stringify({
+        return JSON.stringify({
           success: true,
           name: project.name,
           path: project.path,
@@ -731,7 +731,7 @@ export class PremiereProTools {
           hasActiveSequence: project.activeSequence !== null
         });
       } catch (e) {
-        JSON.stringify({
+        return JSON.stringify({
           success: false,
           error: e.toString()
         });
@@ -799,13 +799,13 @@ export class PremiereProTools {
         var newPath = "${location}/${name}.prproj";
         project.saveAs(newPath);
         
-        JSON.stringify({
+        return JSON.stringify({
           success: true,
           message: "Project saved as: " + newPath,
           newPath: newPath
         });
       } catch (e) {
-        JSON.stringify({
+        return JSON.stringify({
           success: false,
           error: e.toString()
         });
@@ -873,7 +873,7 @@ export class PremiereProTools {
         
         importFiles(folder, targetBin);
         
-        JSON.stringify({
+        return JSON.stringify({
           success: true,
           importedItems: importedItems,
           errors: errors,
@@ -881,7 +881,7 @@ export class PremiereProTools {
           totalErrors: errors.length
         });
       } catch (e) {
-        JSON.stringify({
+        return JSON.stringify({
           success: false,
           error: e.toString()
         });
@@ -899,14 +899,14 @@ export class PremiereProTools {
         
         var newBin = parentBin.createBin("${name}");
         
-        JSON.stringify({
+        return JSON.stringify({
           success: true,
           binName: "${name}",
           binId: newBin.nodeId,
           parentBin: parentBinName || "Root"
         });
       } catch (e) {
-        JSON.stringify({
+        return JSON.stringify({
           success: false,
           error: e.toString()
         });
@@ -950,14 +950,14 @@ export class PremiereProTools {
         var newSeq = originalSeq.clone();
         newSeq.name = "${newName}";
         
-        JSON.stringify({
+        return JSON.stringify({
           success: true,
           originalSequenceId: "${sequenceId}",
           newSequenceId: newSeq.sequenceID,
           newName: "${newName}"
         });
       } catch (e) {
-        JSON.stringify({
+        return JSON.stringify({
           success: false,
           error: e.toString()
         });
@@ -982,14 +982,14 @@ export class PremiereProTools {
         var sequenceName = sequence.name;
         app.project.deleteSequence(sequence);
         
-        JSON.stringify({
+        return JSON.stringify({
           success: true,
           message: "Sequence deleted successfully",
           deletedSequenceId: "${sequenceId}",
           deletedSequenceName: sequenceName
         });
       } catch (e) {
-        JSON.stringify({
+        return JSON.stringify({
           success: false,
           error: e.toString()
         });
@@ -1109,7 +1109,7 @@ export class PremiereProTools {
           linkedClips[i].remove(ripple, 0);
         }
 
-        JSON.stringify({
+        return JSON.stringify({
           success: true,
           message: "Clip(s) removed from timeline",
           clipId: "${clipId}",
@@ -1118,7 +1118,7 @@ export class PremiereProTools {
           linkedClipsRemoved: linkedClips.length
         });
       } catch (e) {
-        JSON.stringify({
+        return JSON.stringify({
           success: false,
           error: e.toString()
         });
@@ -1214,7 +1214,7 @@ export class PremiereProTools {
         // Track change not yet implemented - requires remove and re-insert
         ` : ''}
 
-        JSON.stringify({
+        return JSON.stringify({
           success: true,
           message: "Clip(s) moved successfully",
           clipId: "${clipId}",
@@ -1225,7 +1225,7 @@ export class PremiereProTools {
           linkedClipsMoved: linkedClips.length
         });
       } catch (e) {
-        JSON.stringify({
+        return JSON.stringify({
           success: false,
           error: e.toString()
         });
@@ -1285,7 +1285,7 @@ export class PremiereProTools {
         clip.outPoint = durationOut;
         ` : ''}
 
-        JSON.stringify({
+        return JSON.stringify({
           success: true,
           message: "Clip trimmed successfully",
           clipId: "${clipId}",
@@ -1297,7 +1297,7 @@ export class PremiereProTools {
           newDuration: clip.duration.seconds
         });
       } catch (e) {
-        JSON.stringify({
+        return JSON.stringify({
           success: false,
           error: e.toString()
         });
@@ -1373,7 +1373,7 @@ export class PremiereProTools {
         // Apply razor to all tracks at this point
         qeSequence.razor(timecode, true);
 
-        JSON.stringify({
+        return JSON.stringify({
           success: true,
           message: "Clip split successfully using razor tool",
           originalClipId: "${clipId}",
@@ -1382,7 +1382,7 @@ export class PremiereProTools {
           timecode: timecode
         });
       } catch (e) {
-        JSON.stringify({
+        return JSON.stringify({
           success: false,
           error: e.toString()
         });
@@ -1483,14 +1483,14 @@ export class PremiereProTools {
         }
         ` : ''}
 
-        JSON.stringify({
+        return JSON.stringify({
           success: true,
           message: "Effect applied successfully",
           clipId: "${clipId}",
           effectName: "${effectName}"
         });
       } catch (e) {
-        JSON.stringify({
+        return JSON.stringify({
           success: false,
           error: e.toString()
         });
@@ -1574,14 +1574,14 @@ export class PremiereProTools {
           qeClip.removeAudioEffect(effect);
         }
 
-        JSON.stringify({
+        return JSON.stringify({
           success: true,
           message: "Effect removed successfully",
           clipId: "${clipId}",
           effectName: "${effectName}"
         });
       } catch (e) {
-        JSON.stringify({
+        return JSON.stringify({
           success: false,
           error: e.toString()
         });
@@ -1646,7 +1646,7 @@ export class PremiereProTools {
         }
 
         // Enable QE DOM
-        var qe = app.enableQE();
+        app.enableQE();
         var qeProject = qe.project;
         var qeSequence = qeProject.getActiveSequence();
 
@@ -1694,7 +1694,7 @@ export class PremiereProTools {
         // Parameters: transition, addToStart, duration, offset, alignment, singleSided, alignToVideo
         qeClip1.addTransition(transitionObject, false, durationStr, "0", 0.5, false, result1.isVideo);
 
-        JSON.stringify({
+        return JSON.stringify({
           success: true,
           message: "Transition added successfully between clips",
           transitionName: "${transitionName}",
@@ -1703,7 +1703,7 @@ export class PremiereProTools {
           clip2Id: "${clipId2}"
         });
       } catch (e) {
-        JSON.stringify({
+        return JSON.stringify({
           success: false,
           error: e.toString()
         });
@@ -1766,7 +1766,7 @@ export class PremiereProTools {
         }
 
         // Enable QE DOM
-        var qe = app.enableQE();
+        app.enableQE();
         var qeProject = qe.project;
         var qeSequence = qeProject.getActiveSequence();
 
@@ -1815,7 +1815,7 @@ export class PremiereProTools {
         var addToStart = "${position}" === "start";
         qeClip.addTransition(transitionObject, addToStart, durationStr, "0", 0.5, false, result.isVideo);
 
-        JSON.stringify({
+        return JSON.stringify({
           success: true,
           message: "Transition added successfully to clip",
           transitionName: "${transitionName}",
@@ -1824,7 +1824,7 @@ export class PremiereProTools {
           clipId: "${clipId}"
         });
       } catch (e) {
-        JSON.stringify({
+        return JSON.stringify({
           success: false,
           error: e.toString()
         });
@@ -1909,7 +1909,7 @@ export class PremiereProTools {
         volumeProperty.setTimeVarying(false);
         volumeProperty.setValue(dbToDec(${level}));
 
-        JSON.stringify({
+        return JSON.stringify({
           success: true,
           message: "Audio level adjusted successfully",
           clipId: "${clipId}",
@@ -1917,7 +1917,7 @@ export class PremiereProTools {
           note: "Level set to ${level} dB"
         });
       } catch (e) {
-        JSON.stringify({
+        return JSON.stringify({
           success: false,
           error: e.toString()
         });
@@ -2009,7 +2009,7 @@ export class PremiereProTools {
         }
         `).join('\n')}
 
-        JSON.stringify({
+        return JSON.stringify({
           success: true,
           message: "Audio keyframes added successfully",
           clipId: "${clipId}",
@@ -2017,7 +2017,7 @@ export class PremiereProTools {
           totalKeyframes: addedKeyframes.length
         });
       } catch (e) {
-        JSON.stringify({
+        return JSON.stringify({
           success: false,
           error: e.toString()
         });
@@ -2067,7 +2067,7 @@ export class PremiereProTools {
         // setMute takes 1 for mute, 0 for unmute
         track.setMute(${muted} ? 1 : 0);
 
-        JSON.stringify({
+        return JSON.stringify({
           success: true,
           message: "Track mute status changed successfully",
           sequenceId: "${sequenceId}",
@@ -2075,7 +2075,7 @@ export class PremiereProTools {
           muted: ${muted}
         });
       } catch (e) {
-        JSON.stringify({
+        return JSON.stringify({
           success: false,
           error: e.toString()
         });
@@ -2245,7 +2245,7 @@ export class PremiereProTools {
         } catch (e) {}
         ` : ''}
 
-        JSON.stringify({
+        return JSON.stringify({
           success: true,
           message: "Color correction applied successfully",
           clipId: "${clipId}",
@@ -2253,7 +2253,7 @@ export class PremiereProTools {
         });
 
       } catch (e) {
-        JSON.stringify({
+        return JSON.stringify({
           success: false,
           error: e.toString()
         });
@@ -2312,7 +2312,7 @@ export class PremiereProTools {
         var titleClip = track.insertClip(titleItem, new Time("${args.startTime}s"));
         titleClip.end = new Time(titleClip.start.seconds + ${args.duration});
         
-        JSON.stringify({
+        return JSON.stringify({
           success: true,
           message: "Text overlay added successfully",
           text: "${args.text}",
@@ -2322,7 +2322,7 @@ export class PremiereProTools {
           trackIndex: ${args.trackIndex}
         });
       } catch (e) {
-        JSON.stringify({
+        return JSON.stringify({
           success: false,
           error: e.toString()
         });
@@ -2381,7 +2381,7 @@ export class PremiereProTools {
         var shapeClip = track.insertClip(shapeItem, new Time("${args.startTime}s"));
         shapeClip.end = new Time(shapeClip.start.seconds + ${args.duration});
         
-        JSON.stringify({
+        return JSON.stringify({
           success: true,
           message: "Shape added successfully",
           shapeType: "${args.shapeType}",
@@ -2391,7 +2391,7 @@ export class PremiereProTools {
           trackIndex: ${args.trackIndex}
         });
       } catch (e) {
-        JSON.stringify({
+        return JSON.stringify({
           success: false,
           error: e.toString()
         });
@@ -2572,7 +2572,7 @@ export class PremiereProTools {
         
         sequence.exportFrame(new Time("${time}s"), "${outputPath}", "${format}");
         
-        JSON.stringify({
+        return JSON.stringify({
           success: true,
           message: "Frame exported successfully",
           sequenceId: "${sequenceId}",
@@ -2581,7 +2581,7 @@ export class PremiereProTools {
           format: "${format}"
         });
       } catch (e) {
-        JSON.stringify({
+        return JSON.stringify({
           success: false,
           error: e.toString()
         });
@@ -2613,7 +2613,7 @@ export class PremiereProTools {
           return;
         }
         
-        JSON.stringify({
+        return JSON.stringify({
           success: true,
           message: "Multicam sequence created successfully",
           name: "${name}",
@@ -2622,7 +2622,7 @@ export class PremiereProTools {
           syncMethod: "${syncMethod}"
         });
       } catch (e) {
-        JSON.stringify({
+        return JSON.stringify({
           success: false,
           error: e.toString()
         });
@@ -2655,7 +2655,7 @@ export class PremiereProTools {
           return;
         }
         
-        JSON.stringify({
+        return JSON.stringify({
           success: true,
           message: "Proxy media creation started",
           proxyPreset: "${proxyPreset}",
@@ -2663,7 +2663,7 @@ export class PremiereProTools {
           replaceOriginals: ${replaceOriginals}
         });
       } catch (e) {
-        JSON.stringify({
+        return JSON.stringify({
           success: false,
           error: e.toString()
         });
@@ -2698,7 +2698,7 @@ export class PremiereProTools {
         
         // This would require sophisticated beat detection and auto-editing algorithms
         // For now, return a placeholder response with the detected parameters
-        JSON.stringify({
+        return JSON.stringify({
           success: true,
           message: "Auto-edit to music analysis completed",
           audioTrackId: "${audioTrackId}",
@@ -2708,7 +2708,7 @@ export class PremiereProTools {
           note: "This feature requires advanced beat detection implementation"
         });
       } catch (e) {
-        JSON.stringify({
+        return JSON.stringify({
           success: false,
           error: e.toString()
         });
@@ -2825,7 +2825,7 @@ export class PremiereProTools {
           }
         } catch (e) {}
 
-        JSON.stringify({
+        return JSON.stringify({
           success: true,
           message: "Warp Stabilizer applied successfully",
           clipId: "${clipId}",
@@ -2834,7 +2834,7 @@ export class PremiereProTools {
           appliedSettings: appliedSettings
         });
       } catch (e) {
-        JSON.stringify({
+        return JSON.stringify({
           success: false,
           error: e.toString()
         });
