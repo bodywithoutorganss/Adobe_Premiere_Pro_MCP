@@ -342,8 +342,12 @@ node test-motion-effect.cjs
 ---
 
 ### 14. Add Effect ⏸️
-**Test Script:** Create `test-add-effect.cjs`
+**Test Script:** `test-add-effect.cjs`
 **Status:** NOT YET TESTED
+
+```bash
+node test-add-effect.cjs
+```
 
 **Expected Result:**
 - Effect applied to clip
@@ -353,15 +357,21 @@ node test-motion-effect.cjs
 **Effects to Test:**
 - [ ] Gaussian Blur
 - [ ] Brightness & Contrast
-- [ ] Color Balance
-- [ ] Fast Color Corrector
 - [ ] Vignette
+- [ ] Sharpen
+- [ ] Fast Color Corrector
+
+**Note:** For Lumetri Color, use test-color-correct.cjs. For Warp Stabilizer, use test-stabilize.cjs.
 
 ---
 
 ### 15. Add Transition ⏸️
-**Test Script:** Create `test-add-transition.cjs`
+**Test Script:** `test-add-transition.cjs`
 **Status:** NOT YET TESTED
+
+```bash
+node test-add-transition.cjs
+```
 
 **Expected Result:**
 - Transition added between clips
@@ -373,6 +383,8 @@ node test-motion-effect.cjs
 - [ ] Dip to Black
 - [ ] Constant Power (audio)
 - [ ] Exponential Fade (audio)
+
+**Important:** Essential for cut sheet audio crossfades (music bed fades, dialogue transitions).
 
 ---
 
@@ -425,8 +437,12 @@ node test-split-clip.cjs
 ## 🔊 Audio Operations
 
 ### 18. Adjust Audio Level ⏸️
-**Test Script:** Create `test-adjust-audio.cjs`
+**Test Script:** `test-adjust-audio.cjs`
 **Status:** NOT YET TESTED
+
+```bash
+node test-adjust-audio.cjs
+```
 
 **Expected Result:**
 - Audio volume changed
@@ -437,7 +453,11 @@ node test-split-clip.cjs
 - [ ] 0 dB (unity)
 - [ ] +6 dB (louder)
 - [ ] -6 dB (quieter)
+- [ ] -12 dB (quiet background)
+- [ ] -20 dB (music bed under dialogue)
 - [ ] -∞ dB (mute)
+
+**Important:** Critical for cut sheet music bed implementation (-20dB typical).
 
 ---
 
@@ -602,5 +622,5 @@ After any code changes, rerun:
 ---
 
 **Last Updated:** 2025-12-08
-**Status:** 7/18 operations tested (39%)
-**Next Tests:** Warp stabilizer, speed change, trim, split
+**Status:** 7/21 operations tested (33%) | 18/21 test scripts created (86%)
+**Next Tests:** Motion operations (critical), warp stabilizer, speed change, transitions, audio
