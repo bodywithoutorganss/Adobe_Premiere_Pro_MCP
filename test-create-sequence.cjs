@@ -17,8 +17,6 @@ const path = require('path');
 
 // Configuration
 const BRIDGE_DIR = '/tmp/premiere-bridge';
-const REQUEST_FILE = path.join(BRIDGE_DIR, 'request.json');
-const RESPONSE_FILE = path.join(BRIDGE_DIR, 'response.json');
 const TIMEOUT_MS = 10000;
 
 // Test parameters
@@ -60,16 +58,16 @@ const testConfig = {
   ]
 };
 
-function waitForResponse(timeout) {
+function waitForResponse(responseFile, timeout) {
   return new Promise((resolve, reject) => {
     const startTime = Date.now();
     const checkInterval = 100;
 
     const check = () => {
-      if (fs.existsSync(RESPONSE_FILE)) {
+      if (fs.existsSync(responseFile)) {
         try {
-          const response = JSON.parse(fs.readFileSync(RESPONSE_FILE, 'utf-8'));
-          fs.unlinkSync(RESPONSE_FILE);
+          const response = JSON.parse(fs.readFileSync(responseFile, 'utf-8'));
+          fs.unlinkSync(responseFile);
           resolve(response);
         } catch (error) {
           reject(new Error(`Failed to parse response: ${error.message}`));
@@ -86,16 +84,66 @@ function waitForResponse(timeout) {
 }
 
 async function createSequence(sequenceName, options = {}) {
-  // Create request
-  const request = {
-    operation: 'create_sequence',
-    name: sequenceName,
-    ...options,
-    timestamp: Date.now()
-  };
+  // Generate unique command ID
+  const commandId = `create-seq-${Date.now()}`;
+  const commandFile = path.join(BRIDGE_DIR, `command-${commandId}.json`);
+  const responseFile = path.join(BRIDGE_DIR, `response-${commandId}.json`);
 
-  // Write request file
-  fs.writeFileSync(REQUEST_FILE, JSON.stringify(request, null, 2));
+  // Build ExtendScript for creating sequence
+  let script;
+  if (options.presetPath) {
+    script = `
+      try {
+        var newSeq = app.project.createNewSequence("${sequenceName}", "${options.presetPath}");
+        JSON.stringify({
+          success: true,
+          message: "Sequence created with preset",
+          name: newSeq.name,
+          id: newSeq.sequenceID,
+          frameRate: newSeq.framerate
+        });
+      } catch (e) {
+        JSON.stringify({
+          success: false,
+          error: e.toString()
+        });
+      }
+    `;
+  } else {
+    // Create with custom settings
+    script = `
+      try {
+        var newSeq = app.project.createNewSequence("${sequenceName}", "");
+        if (newSeq) {
+          JSON.stringify({
+            success: true,
+            message: "Sequence created",
+            name: newSeq.name,
+            id: newSeq.sequenceID,
+            frameRate: newSeq.framerate
+          });
+        } else {
+          JSON.stringify({
+            success: false,
+            error: "Failed to create sequence - createNewSequence returned null"
+          });
+        }
+      } catch (e) {
+        JSON.stringify({
+          success: false,
+          error: e.toString()
+        });
+      }
+    `;
+  }
+
+  // Write command file
+  fs.writeFileSync(commandFile, JSON.stringify({
+    id: commandId,
+    script: script,
+    timestamp: new Date().toISOString()
+  }, null, 2));
+
   console.log(`\n📤 Request sent: create_sequence`);
   console.log(`   Name: ${sequenceName}`);
   if (options.width && options.height) {
@@ -107,7 +155,7 @@ async function createSequence(sequenceName, options = {}) {
 
   // Wait for response
   console.log(`\n⏳ Waiting for response (timeout: ${TIMEOUT_MS}ms)...`);
-  const response = await waitForResponse(TIMEOUT_MS);
+  const response = await waitForResponse(responseFile, TIMEOUT_MS);
 
   return response;
 }
