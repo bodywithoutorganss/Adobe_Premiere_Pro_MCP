@@ -56,31 +56,31 @@ export function timecodeToSeconds(
 
   if (parts.length === 2) {
     // MM:SS format
-    minutes = parseInt(parts[0], 10);
+    minutes = parseInt(parts[0]!, 10);
 
     // Check if seconds has decimal or frames
-    if (parts[1].includes('.')) {
-      seconds = parseFloat(parts[1]);
+    if (parts[1]!.includes('.')) {
+      seconds = parseFloat(parts[1]!);
     } else {
-      seconds = parseInt(parts[1], 10);
+      seconds = parseInt(parts[1]!, 10);
     }
   } else if (parts.length === 3) {
     // HH:MM:SS or HH:MM:SS.mmm format
-    hours = parseInt(parts[0], 10);
-    minutes = parseInt(parts[1], 10);
+    hours = parseInt(parts[0]!, 10);
+    minutes = parseInt(parts[1]!, 10);
 
     // Check if seconds has decimal
-    if (parts[2].includes('.')) {
-      seconds = parseFloat(parts[2]);
+    if (parts[2]!.includes('.')) {
+      seconds = parseFloat(parts[2]!);
     } else {
-      seconds = parseInt(parts[2], 10);
+      seconds = parseInt(parts[2]!, 10);
     }
   } else if (parts.length === 4) {
     // HH:MM:SS:FF format (with frames)
-    hours = parseInt(parts[0], 10);
-    minutes = parseInt(parts[1], 10);
-    seconds = parseInt(parts[2], 10);
-    frames = parseInt(parts[3], 10);
+    hours = parseInt(parts[0]!, 10);
+    minutes = parseInt(parts[1]!, 10);
+    seconds = parseInt(parts[2]!, 10);
+    frames = parseInt(parts[3]!, 10);
 
     if (!options.frameRate) {
       throw new Error('frameRate required for frame-based timecodes (HH:MM:SS:FF)');
@@ -167,7 +167,7 @@ function pad(num: number, length: number = 2): string {
  * parseTime("00:15:23:12", 24) // 923.5
  */
 export function parseTime(time: string | number, frameRate?: number): number {
-  return timecodeToSeconds(time, { frameRate });
+  return timecodeToSeconds(time, frameRate !== undefined ? { frameRate } : {});
 }
 
 /**
