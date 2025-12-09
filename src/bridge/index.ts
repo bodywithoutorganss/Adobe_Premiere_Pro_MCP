@@ -265,7 +265,7 @@ export class PremiereProBridge {
     return await this.executeScript(script);
   }
 
-  async addToTimeline(sequenceId: string, projectItemId: string, trackIndex: number, time: number): Promise<PremiereProClip> {
+  async addToTimeline(sequenceId: string, projectItemId: string, trackIndex: number, time: number, audioTrackIndex = 0): Promise<PremiereProClip> {
     const script = `
       try {
         // Find sequence by ID
@@ -304,13 +304,15 @@ export class PremiereProBridge {
 
         // Use sequence.insertClip() with proper parameters
         // insertClip(projectItem, time, videoTrackIndex, audioTrackIndex)
-        var insertedClip = sequence.insertClip(projectItem, ${time}, ${trackIndex}, 0);
+        var insertedClip = sequence.insertClip(projectItem, ${time}, ${trackIndex}, ${audioTrackIndex});
 
         JSON.stringify({
           success: true,
           message: "Clip inserted successfully",
           sequenceName: sequence.name,
-          itemName: projectItem.name
+          itemName: projectItem.name,
+          videoTrack: ${trackIndex},
+          audioTrack: ${audioTrackIndex}
         });
       } catch (e) {
         JSON.stringify({

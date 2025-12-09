@@ -140,7 +140,8 @@ async function processShot(shot, frameRate) {
     operation: 'add_to_timeline',
     sequenceName: 'SEQUENCE_NAME_PLACEHOLDER',  // Would come from cut sheet context
     projectItemId: shot.clipName,
-    trackIndex: shot.track,
+    trackIndex: shot.videoTrack || shot.track || 0,
+    audioTrackIndex: shot.audioTrack !== undefined ? shot.audioTrack : 0,
     time: timelineStartSeconds,
     timestamp: Date.now()
   };
@@ -194,7 +195,8 @@ async function processAudioClip(audioClip, frameRate) {
     operation: 'add_to_timeline',
     sequenceName: 'SEQUENCE_NAME_PLACEHOLDER',
     projectItemId: audioClip.clipName,
-    trackIndex: audioClip.track,
+    trackIndex: audioClip.videoTrack || 0,  // Video track (usually 0 for audio-only)
+    audioTrackIndex: audioClip.audioTrack || audioClip.track || 0,  // Audio track
     time: timelineStartSeconds,
     sourceIn: sourceInSeconds,
     sourceOut: sourceOutSeconds,

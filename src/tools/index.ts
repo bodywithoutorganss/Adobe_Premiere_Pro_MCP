@@ -146,7 +146,8 @@ export class PremiereProTools {
         inputSchema: z.object({
           sequenceId: z.string().describe('The ID of the sequence (timeline) to add the clip to'),
           projectItemId: z.string().describe('The ID of the project item (clip) to add'),
-          trackIndex: z.number().describe('The index of the video or audio track (0-based)'),
+          trackIndex: z.number().describe('The index of the video track (0-based, V1=0, V2=1, etc.)'),
+          audioTrackIndex: z.number().optional().describe('The index of the audio track (0-based, A1=0, A2=1, etc.). Defaults to 0 (A1) if not specified.'),
           time: z.number().describe('The time in seconds where the clip should be placed on the timeline'),
           insertMode: z.enum(['overwrite', 'insert']).optional().describe('Whether to overwrite existing content or insert and shift')
         })
@@ -460,7 +461,7 @@ export class PremiereProTools {
 
         // Timeline Operations
         case 'add_to_timeline':
-          return await this.addToTimeline(args.sequenceId, args.projectItemId, args.trackIndex, args.time, args.insertMode);
+          return await this.addToTimeline(args.sequenceId, args.projectItemId, args.trackIndex, args.time, args.insertMode, args.audioTrackIndex);
         case 'remove_from_timeline':
           return await this.removeFromTimeline(args.clipId, args.deleteMode);
         case 'move_clip':
@@ -1006,15 +1007,16 @@ export class PremiereProTools {
   }
 
   // Timeline Operations Implementation
-  private async addToTimeline(sequenceId: string, projectItemId: string, trackIndex: number, time: number, insertMode = 'overwrite'): Promise<any> {
+  private async addToTimeline(sequenceId: string, projectItemId: string, trackIndex: number, time: number, insertMode = 'overwrite', audioTrackIndex = 0): Promise<any> {
     try {
-      const result = await this.bridge.addToTimeline(sequenceId, projectItemId, trackIndex, time);
+      const result = await this.bridge.addToTimeline(sequenceId, projectItemId, trackIndex, time, audioTrackIndex);
       return {
         success: true,
         message: `Clip added to timeline successfully`,
         sequenceId: sequenceId,
         projectItemId: projectItemId,
         trackIndex: trackIndex,
+        audioTrackIndex: audioTrackIndex,
         time: time,
         insertMode: insertMode,
         ...result
@@ -1026,6 +1028,7 @@ export class PremiereProTools {
         sequenceId: sequenceId,
         projectItemId: projectItemId,
         trackIndex: trackIndex,
+        audioTrackIndex: audioTrackIndex,
         time: time
       };
     }
