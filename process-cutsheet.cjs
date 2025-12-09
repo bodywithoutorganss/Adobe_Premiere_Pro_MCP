@@ -271,7 +271,83 @@ async function main() {
 
   const frameRate = cutSheet.sequence.frameRate;
 
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  // STEP 1: Import Media (if specified)
+  if (cutSheet.media && cutSheet.media.import && cutSheet.media.import.length > 0) {
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('IMPORTING MEDIA FILES');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    for (let i = 0; i < cutSheet.media.import.length; i++) {
+      const mediaFile = cutSheet.media.import[i];
+
+      console.log(`\n[${i + 1}/${cutSheet.media.import.length}] Importing: ${mediaFile.name || mediaFile.path}`);
+      console.log(`   File: ${mediaFile.path}`);
+      if (mediaFile.bin) console.log(`   Bin: ${mediaFile.bin}`);
+
+      const importRequest = {
+        operation: 'import_media',
+        filePath: mediaFile.path,
+        binName: mediaFile.bin,
+        timestamp: Date.now()
+      };
+
+      fs.writeFileSync(REQUEST_FILE, JSON.stringify(importRequest, null, 2));
+      const importResponse = await waitForResponse(TIMEOUT_MS);
+
+      if (importResponse.success) {
+        console.log(`   ✅ Imported: ${importResponse.name || mediaFile.name}`);
+        if (importResponse.id) console.log(`      ID: ${importResponse.id}`);
+      } else {
+        console.error(`   ❌ Failed: ${importResponse.error}`);
+        throw new Error(`Import failed for ${mediaFile.path}: ${importResponse.error}`);
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    console.log(`\n✅ All media files imported (${cutSheet.media.import.length} files)`);
+  }
+
+  // STEP 2: Create Sequence (if autoCreate is true)
+  if (cutSheet.sequence.autoCreate) {
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('CREATING SEQUENCE');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    console.log(`\nCreating sequence: ${cutSheet.sequence.name}`);
+    console.log(`   Resolution: ${cutSheet.sequence.width}x${cutSheet.sequence.height}`);
+    console.log(`   Frame Rate: ${cutSheet.sequence.frameRate} fps`);
+    console.log(`   Sample Rate: ${cutSheet.sequence.sampleRate} Hz`);
+
+    const sequenceRequest = {
+      operation: 'create_sequence',
+      name: cutSheet.sequence.name,
+      width: cutSheet.sequence.width,
+      height: cutSheet.sequence.height,
+      frameRate: cutSheet.sequence.frameRate,
+      sampleRate: cutSheet.sequence.sampleRate,
+      timestamp: Date.now()
+    };
+
+    fs.writeFileSync(REQUEST_FILE, JSON.stringify(sequenceRequest, null, 2));
+    const sequenceResponse = await waitForResponse(TIMEOUT_MS);
+
+    if (sequenceResponse.success) {
+      console.log(`\n✅ Sequence created: ${cutSheet.sequence.name}`);
+      if (sequenceResponse.id) console.log(`   Sequence ID: ${sequenceResponse.id}`);
+    } else {
+      // If sequence already exists, that's okay - continue
+      if (sequenceResponse.error && sequenceResponse.error.includes('already exists')) {
+        console.log(`\n⚠️  Sequence already exists, continuing...`);
+      } else {
+        console.error(`\n❌ Failed to create sequence: ${sequenceResponse.error}`);
+        throw new Error(`Sequence creation failed: ${sequenceResponse.error}`);
+      }
+    }
+  }
+
+  // STEP 3: Process Shots
+  console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('PROCESSING VIDEO SHOTS');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 

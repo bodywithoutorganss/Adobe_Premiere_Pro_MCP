@@ -1,11 +1,55 @@
 {
   "project": "DW_EP032_YetiLogo",
+  "media": {
+    "import": [
+      {
+        "path": "/path/to/media/ranch_golden_hour.mov",
+        "name": "ranch_golden_hour",
+        "bin": "Stock"
+      },
+      {
+        "path": "/path/to/media/cattle_feeding.mov",
+        "name": "cattle_feeding",
+        "bin": "B-Roll"
+      },
+      {
+        "path": "/path/to/media/truck_bed.mov",
+        "name": "truck_bed",
+        "bin": "B-Roll"
+      },
+      {
+        "path": "/path/to/media/yeti_tumbler_logo.mov",
+        "name": "yeti_tumbler_logo",
+        "bin": "B-Roll"
+      },
+      {
+        "path": "/path/to/media/episode_032_ben.mov",
+        "name": "episode_032_ben",
+        "bin": "Interviews"
+      },
+      {
+        "path": "/path/to/media/episode_032_scott.mov",
+        "name": "episode_032_scott",
+        "bin": "Interviews"
+      },
+      {
+        "path": "/path/to/media/contemplative_acoustic.wav",
+        "name": "contemplative_acoustic",
+        "bin": "Audio"
+      }
+    ]
+  },
   "sequence": {
     "name": "DW_EP032_YetiLogo_9x16_v01",
     "format": "9:16",
-    "resolution": "1080x1920",
+    "width": 1080,
+    "height": 1920,
     "frameRate": 30,
-    "duration": "00:00:50"
+    "sampleRate": 48000,
+    "videoTracks": 2,
+    "audioTracks": 4,
+    "duration": "00:00:50",
+    "autoCreate": true
   },
   "shots": [
     {
