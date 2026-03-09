@@ -133,35 +133,46 @@
 
 ### Implemented ✅
 
-**Core Operations (21 total):**
-- Timeline: add, remove, move, trim, split
-- Effects: color correct, LUT, stabilizer, speed change
-- Audio: levels, fades, transitions
-- Motion: set_motion, reframe_for_916
-- Export: sequence export, proxy creation
+**Core Operations (97+ tools after upstream merge):**
+- Timeline: add, remove, move, trim, split, nested sequences
+- Effects: color correct, LUT, stabilizer, speed change, keyframes
+- Audio: levels, fades, transitions, mute, keyframes
+- Motion: set_motion, reframe_for_916 (our custom), auto_reframe_sequence (upstream AI-based)
+- Import: import_media, import_folder, create_bin
+- Sequences: create_sequence, duplicate, delete, scene edit detection
+- Export: sequence export, frame export, proxy management
+- Captions: caption track creation
+- Media: relink, color labels, subclips, MOGRT import
+- Markers: add, delete, update, list
+- Playhead: get/set position
 - Timecode: full support (HH:MM:SS, etc.)
 
 **Infrastructure:**
 - MCP server architecture ✅
-- Bridge communication ✅
-- Test suite (21/21 scripts) ✅
+- Bridge communication with ExtendScript helpers (__findClip, __findSequence, __findProjectItem) ✅
+- CEP plugin with panel UI ✅
+- Security utilities (secure temp dirs, path validation) ✅
+- Unit tests (bridge, tools, prompts, resources, integration) ✅
 - Timecode utilities ✅
-- Documentation ✅
+- Install/uninstall/diagnostic scripts ✅
 
 ### To Implement 🔨
 
 **High Priority:**
-1. `import_media` - Automatic media import
-2. `create_sequence` - Auto-create sequences
-3. Track management review
+1. End-to-end cut sheet processing validation (with Premiere running)
+2. Live testing of motion tools (set_motion, reframe_for_916)
 
 **Medium Priority:**
-4. Additional track utilities (if needed)
-5. Batch import optimization
+3. Additional track utilities (if needed after live testing)
+4. Batch import optimization
 
 **Low Priority (Backlog):**
-6. Markers
-7. Advanced features
+5. Advanced features (multicam, batch cut sheets)
+
+### Critical Timeline ⚠️
+
+CEP/ExtendScript support ends September 2026. The entire ecosystem will need
+to migrate to UXP, which currently has limited timeline API support.
 
 ---
 
@@ -449,20 +460,25 @@ cutsheet-yeti-logo-timecode.json  - Example cut sheet
 
 | Category | Complete | In Progress | Planned | Total |
 |----------|----------|-------------|---------|-------|
-| Core Operations | 21 | 0 | 0 | 21 |
-| Import/Export | 1 | 2 | 0 | 3 |
-| Test Scripts | 21 | 2 | 0 | 23 |
+| Core Operations | 97+ | 0 | 0 | 97+ |
+| Import/Export | 5 | 0 | 0 | 5 |
+| Test Scripts | 21+ | 0 | 0 | 21+ |
+| Unit Tests | 5 suites | 0 | 0 | 5 |
 | Documentation | 10 | 1 | 0 | 11 |
-| Live Testing | 7 | 0 | 14 | 21 |
+| Live Testing | 43 | 0 | ~54 | 97 |
 
-### Session 5 Milestones
+### Time Tracking
 
-- [x] Motion implementation (9:16 reframing)
-- [x] Test suite completion (100%)
-- [x] Timecode support
-- [ ] Import automation ← CURRENT
-- [ ] Sequence auto-creation ← CURRENT
-- [ ] Track management review ← CURRENT
+| Milestone | Est (h) | Actual (h) | Status |
+|-----------|---------|------------|--------|
+| Fork sync + code review | 1 | 0.5 | ✅ Complete |
+
+### Session 6 (2026-03-09)
+
+- [x] Competitive landscape research (confirmed #1 Premiere MCP)
+- [x] Fork sync with upstream (24 commits, 97 tools merged)
+- [x] Code review: JSON.stringify safety, name-based property lookup
+- [x] Import/sequence tools now from upstream (no longer need custom impl)
 
 ---
 
@@ -484,6 +500,9 @@ cutsheet-yeti-logo-timecode.json  - Example cut sheet
 - Timecode support was critical for real workflows
 - Fine-grained tools provide good flexibility
 - Comprehensive testing infrastructure pays off
+- Staying close to upstream is worth the merge effort — upstream solved our return-statement bug at the root (IIFE wrapper)
+- Use displayName-based property lookup in ExtendScript, never hardcoded array indices
+- CEP/ExtendScript sunset (Sep 2026) means UXP migration planning is needed
 
 ---
 
@@ -501,6 +520,6 @@ cutsheet-yeti-logo-timecode.json  - Example cut sheet
 
 ---
 
-**Last Updated:** 2025-12-08
-**Session:** 5 (Part 5 - Import & Sequence Implementation)
-**Status:** Active Development - Implementing Phase 1
+**Last Updated:** 2026-03-09
+**Session:** 6 (Fork sync + code review)
+**Status:** Synced with upstream (97+ tools). Next: live testing with Premiere Pro.
