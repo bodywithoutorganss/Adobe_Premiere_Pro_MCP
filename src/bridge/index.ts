@@ -9,8 +9,55 @@ import { Logger } from '../utils/logger.js';
 import { ChildProcess } from 'child_process';
 import { promises as fs } from 'fs';
 import { join } from 'path';
-// import { tmpdir } from 'os';
 import { v4 as uuidv4 } from 'uuid';
+import { createSecureTempDir, validateFilePath } from '../utils/security.js';
+
+const EXTENDSCRIPT_HELPERS = `
+function __findSequence(id) {
+  for (var i = 0; i < app.project.sequences.numSequences; i++) {
+    if (app.project.sequences[i].sequenceID === id) return app.project.sequences[i];
+  }
+  return null;
+}
+function __findClip(nodeId) {
+  var seq = app.project.activeSequence;
+  if (!seq) return null;
+  for (var t = 0; t < seq.videoTracks.numTracks; t++) {
+    var track = seq.videoTracks[t];
+    for (var c = 0; c < track.clips.numItems; c++) {
+      if (track.clips[c].nodeId === nodeId)
+        return { clip: track.clips[c], track: track, trackIndex: t, clipIndex: c, trackType: 'video' };
+    }
+  }
+  for (var t = 0; t < seq.audioTracks.numTracks; t++) {
+    var track = seq.audioTracks[t];
+    for (var c = 0; c < track.clips.numItems; c++) {
+      if (track.clips[c].nodeId === nodeId)
+        return { clip: track.clips[c], track: track, trackIndex: t, clipIndex: c, trackType: 'audio' };
+    }
+  }
+  return null;
+}
+function __findProjectItem(nodeId) {
+  function walk(item) {
+    if (item.nodeId === nodeId) return item;
+    if (item.children) {
+      for (var i = 0; i < item.children.numItems; i++) {
+        var found = walk(item.children[i]);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+  return walk(app.project.rootItem);
+}
+function __ticksToSeconds(ticks) {
+  return parseInt(ticks, 10) / 254016000000;
+}
+function __secondsToTicks(seconds) {
+  return String(Math.round(seconds * 254016000000));
+}
+`;
 
 export interface PremiereProProject {
   id: string;
@@ -66,14 +113,19 @@ export class PremiereProBridge {
   private logger: Logger;
   private communicationMethod: 'uxp' | 'extendscript' | 'file';
   private tempDir: string;
+  private readonly usesExternalTempDir: boolean;
   private uxpProcess?: ChildProcess;
   private isInitialized = false;
+  private sessionId: string;
 
   constructor() {
     this.logger = new Logger('PremiereProBridge');
     this.communicationMethod = 'file'; // Default to file-based communication
-    // Use a fixed location so the CEP panel can watch the same folder
-    this.tempDir = '/tmp/premiere-bridge';
+    this.sessionId = uuidv4();
+    // Use PREMIERE_TEMP_DIR if set (same path as UXP plugin "Temp Directory"), else session-specific
+    const envDir = process.env.PREMIERE_TEMP_DIR;
+    this.usesExternalTempDir = Boolean(envDir);
+    this.tempDir = envDir ? envDir.replace(/\/$/, '') : createSecureTempDir(this.sessionId);
   }
 
   async initialize(): Promise<void> {
@@ -91,8 +143,8 @@ export class PremiereProBridge {
 
   private async setupTempDirectory(): Promise<void> {
     try {
-      await fs.mkdir(this.tempDir, { recursive: true });
-      this.logger.debug(`Temp directory created: ${this.tempDir}`);
+      await fs.mkdir(this.tempDir, { recursive: true, mode: 0o700 }); // Restrict to owner only
+      this.logger.debug(`Secure temp directory created: ${this.tempDir}`);
     } catch (error) {
       this.logger.error('Failed to create temp directory:', error);
       throw error;
@@ -138,10 +190,15 @@ export class PremiereProBridge {
     const responseFile = join(this.tempDir, `response-${commandId}.json`);
 
     try {
+      // Prepend helper functions and wrap script in IIFE so that
+      // "return JSON.stringify(...)" is valid (ES3/ExtendScript forbids
+      // return statements outside of function bodies at the top level).
+      const fullScript = EXTENDSCRIPT_HELPERS + '(function(){\n' + script + '\n})();';
+
       // Write command to file
       await fs.writeFile(commandFile, JSON.stringify({
         id: commandId,
-        script,
+        script: fullScript,
         timestamp: new Date().toISOString()
       }));
 
@@ -159,20 +216,24 @@ export class PremiereProBridge {
     }
   }
 
-  private async waitForResponse(responseFile: string, timeout = 30000): Promise<any> {
+  private async waitForResponse(responseFile: string, timeout = 60000): Promise<any> {
     const startTime = Date.now();
-    
+
     while (Date.now() - startTime < timeout) {
       try {
         const response = await fs.readFile(responseFile, 'utf8');
-        return JSON.parse(response);
+        const parsed = JSON.parse(response);
+        if (parsed.result !== undefined) return parsed.result;
+        return parsed;
       } catch (error) {
-        // File doesn't exist yet, wait a bit
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 150));
       }
     }
-    
-    throw new Error('Response timeout');
+
+    throw new Error(
+      'Bridge response timeout. Ensure Premiere Pro is open, MCP Bridge (CEP or UXP) panel is open, ' +
+      'Temp Directory is set to ' + this.tempDir + ', and Start Bridge is clicked.'
+    );
   }
 
   // Project Management
@@ -183,7 +244,7 @@ export class PremiereProBridge {
       var project = app.project;
       
       // Return project info
-      JSON.stringify({
+      return JSON.stringify({
         id: project.documentID,
         name: project.name,
         path: project.path,
@@ -203,7 +264,7 @@ export class PremiereProBridge {
       var project = app.project;
       
       // Return project info
-      JSON.stringify({
+      return JSON.stringify({
         id: project.documentID,
         name: project.name,
         path: project.path,
@@ -220,29 +281,101 @@ export class PremiereProBridge {
     const script = `
       // Save current project
       app.project.save();
-      JSON.stringify({ success: true });
+      return JSON.stringify({ success: true });
     `;
     
     await this.executeScript(script);
   }
 
   async importMedia(filePath: string): Promise<PremiereProProjectItem> {
+    // Validate file path for security
+    const pathValidation = validateFilePath(filePath);
+    if (!pathValidation.valid) {
+      throw new Error(`Invalid file path: ${pathValidation.error}`);
+    }
+
+    // Use the normalized path from validation (don't double-escape)
+    const safePath = pathValidation.normalized || filePath;
     const script = `
-      // Import media file
-      var file = new File("${filePath}");
-      var importedItem = app.project.importFiles([file.fsName]);
-      
-      // Return imported item info
-      JSON.stringify({
-        id: importedItem.nodeId,
-        name: importedItem.name,
-        type: importedItem.type,
-        mediaPath: importedItem.getMediaPath(),
-        duration: importedItem.getOutPoint() - importedItem.getInPoint(),
-        frameRate: importedItem.getVideoFrameRate()
-      });
+      try {
+        function __walkItems(parent, output) {
+          for (var i = 0; i < parent.children.numItems; i++) {
+            var child = parent.children[i];
+            output.push(child);
+            if (child.type === ProjectItemType.BIN) {
+              __walkItems(child, output);
+            }
+          }
+        }
+
+        var file = new File(${JSON.stringify(safePath)});
+        if (!file.exists) {
+          return JSON.stringify({
+            success: false,
+            error: "File not found: " + ${JSON.stringify(safePath)}
+          });
+        }
+
+        var existingItems = [];
+        __walkItems(app.project.rootItem, existingItems);
+
+        var importResult = app.project.importFiles([file.fsName], true, app.project.rootItem, false);
+        if (!importResult) {
+          return JSON.stringify({
+            success: false,
+            error: "Failed to import file"
+          });
+        }
+
+        var afterItems = [];
+        __walkItems(app.project.rootItem, afterItems);
+
+        var importedItem = null;
+        for (var j = 0; j < afterItems.length; j++) {
+          var candidate = afterItems[j];
+          var alreadyPresent = false;
+          for (var k = 0; k < existingItems.length; k++) {
+            if (existingItems[k].nodeId === candidate.nodeId) {
+              alreadyPresent = true;
+              break;
+            }
+          }
+          if (alreadyPresent) {
+            continue;
+          }
+          try {
+            if (candidate.getMediaPath && candidate.getMediaPath() === file.fsName) {
+              importedItem = candidate;
+              break;
+            }
+          } catch (e) {}
+          if (!importedItem && candidate.name === file.name) {
+            importedItem = candidate;
+          }
+        }
+
+        if (!importedItem) {
+          return JSON.stringify({
+            success: false,
+            error: "Import completed but imported item could not be located"
+          });
+        }
+
+        return JSON.stringify({
+          success: true,
+          id: importedItem.nodeId,
+          name: importedItem.name,
+          type: importedItem.type.toString(),
+          mediaPath: importedItem.getMediaPath ? importedItem.getMediaPath() : file.fsName
+        });
+      } catch (e) {
+        return JSON.stringify({
+          success: false,
+          error: e.toString()
+        });
+      }
     `;
-    
+
     return await this.executeScript(script);
   }
 
@@ -252,7 +385,7 @@ export class PremiereProBridge {
       var sequence = app.project.createNewSequence("${name}", "${presetPath || ''}");
       
       // Return sequence info
-      JSON.stringify({
+      return JSON.stringify({
         id: sequence.sequenceID,
         name: sequence.name,
         duration: sequence.end - sequence.zeroPoint,
@@ -265,63 +398,60 @@ export class PremiereProBridge {
     return await this.executeScript(script);
   }
 
-  async addToTimeline(sequenceId: string, projectItemId: string, trackIndex: number, time: number, audioTrackIndex = 0): Promise<PremiereProClip> {
+  async addToTimeline(sequenceId: string, projectItemId: string, trackIndex: number, time: number): Promise<PremiereProClip> {
     const script = `
       try {
-        // Find sequence by ID
-        var sequence = null;
-        for (var i = 0; i < app.project.sequences.numSequences; i++) {
-          if (app.project.sequences[i].sequenceID === "${sequenceId}") {
-            sequence = app.project.sequences[i];
+        var sequence = __findSequence("${sequenceId}");
+        if (!sequence) {
+          return JSON.stringify({ success: false, error: "Sequence not found" });
+        }
+
+        var projectItem = __findProjectItem("${projectItemId}");
+        if (!projectItem) {
+          return JSON.stringify({ success: false, error: "Project item not found" });
+        }
+
+        var track = sequence.videoTracks[${trackIndex}];
+        if (!track) {
+          return JSON.stringify({ success: false, error: "Video track not found" });
+        }
+
+        track.overwriteClip(projectItem, ${time});
+
+        var placedClip = null;
+        for (var i = 0; i < track.clips.numItems; i++) {
+          var candidate = track.clips[i];
+          if (candidate && candidate.projectItem && candidate.projectItem.nodeId === projectItem.nodeId && Math.abs(candidate.start.seconds - ${time}) < 0.1) {
+            placedClip = candidate;
             break;
           }
         }
-        if (!sequence) {
-          JSON.stringify({ success: false, error: "Sequence not found" });
-          return;
+
+        if (!placedClip && track.clips.numItems > 0) {
+          placedClip = track.clips[track.clips.numItems - 1];
         }
 
-        // Find project item by searching through project recursively
-        function findProjectItem(parent, targetId) {
-          for (var i = 0; i < parent.children.numItems; i++) {
-            var item = parent.children[i];
-            if (item.nodeId === targetId || item.treePath === targetId) {
-              return item;
-            }
-            if (item.type === ProjectItemType.BIN && item.children) {
-              var found = findProjectItem(item, targetId);
-              if (found) return found;
-            }
-          }
-          return null;
+        if (!placedClip) {
+          return JSON.stringify({ success: false, error: "Clip placement did not produce a track item" });
         }
 
-        var projectItem = findProjectItem(app.project.rootItem, "${projectItemId}");
-        if (!projectItem) {
-          JSON.stringify({ success: false, error: "Project item not found" });
-          return;
-        }
-
-        // Use sequence.insertClip() with proper parameters
-        // insertClip(projectItem, time, videoTrackIndex, audioTrackIndex)
-        var insertedClip = sequence.insertClip(projectItem, ${time}, ${trackIndex}, ${audioTrackIndex});
-
-        JSON.stringify({
+        return JSON.stringify({
           success: true,
-          message: "Clip inserted successfully",
-          sequenceName: sequence.name,
-          itemName: projectItem.name,
-          videoTrack: ${trackIndex},
-          audioTrack: ${audioTrackIndex}
+          id: placedClip.nodeId,
+          name: placedClip.name,
+          inPoint: placedClip.start.seconds,
+          outPoint: placedClip.end.seconds,
+          duration: placedClip.duration.seconds,
+          mediaPath: placedClip.projectItem && placedClip.projectItem.getMediaPath ? placedClip.projectItem.getMediaPath() : ""
         });
       } catch (e) {
-        JSON.stringify({
+        return JSON.stringify({
           success: false,
           error: e.toString()
         });
       }
     `;
-
+    
     return await this.executeScript(script);
   }
 
@@ -331,10 +461,10 @@ export class PremiereProBridge {
       var sequence = app.project.getSequenceByID("${sequenceId}");
       var encoder = app.encoder;
       
-      encoder.encodeSequence(sequence, "${outputPath}", "${presetPath}", 
+      encoder.encodeSequence(sequence, "${outputPath}", "${presetPath}",
         encoder.ENCODE_ENTIRE, false);
-      
-      JSON.stringify({ success: true });
+
+      return JSON.stringify({ success: true });
     `;
     
     await this.executeScript(script);
@@ -365,9 +495,9 @@ export class PremiereProBridge {
           return results;
         }
         var items = walk(app.project.rootItem);
-        JSON.stringify({ ok: true, items });
+        return JSON.stringify({ ok: true, items: items });
       } catch (e) {
-        JSON.stringify({ ok: false, error: String(e) });
+        return JSON.stringify({ ok: false, error: String(e) });
       }
     `;
     const result = await this.executeScript(script);
@@ -380,9 +510,12 @@ export class PremiereProBridge {
       this.uxpProcess.kill();
     }
     
-    // Clean up temp directory
+    // Only remove temp dirs created by this server. The shared bridge directory is
+    // configured externally and should persist across restarts.
     try {
-      await fs.rm(this.tempDir, { recursive: true });
+      if (!this.usesExternalTempDir) {
+        await fs.rm(this.tempDir, { recursive: true });
+      }
     } catch (error) {
       this.logger.warn('Failed to clean up temp directory:', error);
     }

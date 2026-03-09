@@ -1,164 +1,214 @@
-# 🎬 MCP Adobe Premiere Pro — AI Video Editing Automation
+# Adobe Premiere Pro MCP Server
 
-> **AI meets Premiere Pro.** Control your edits with natural language and automate your workflow with Claude or any AI agent, powered by the Model Context Protocol (MCP).
+Control Adobe Premiere Pro through MCP using Codex, Claude Code, Claude Desktop, or any other MCP client.
 
 <a href="https://glama.ai/mcp/servers/@hetpatel-11/Adobe_Premiere_Pro_MCP">
   <img width="380" height="200" src="https://glama.ai/mcp/servers/@hetpatel-11/Adobe_Premiere_Pro_MCP/badge" alt="Adobe Premiere Pro MCP server" />
 </a>
 
----
+![Current MCP Bridge (CEP) panel](images/demo.png)
 
-## ✨ What is This?
-This project is an **AI-powered automation bridge for Adobe Premiere Pro**. It exposes a set of editing tools (via MCP) so you can:
-- 🗣️ **Talk to your editor** (via Claude or other AI agents)
-- ⚡ **Automate repetitive tasks**
-- 🧠 **Build smarter, context-aware workflows**
+Current CEP panel UI inside Premiere Pro, using the refreshed bridge controls and status layout.
 
----
+## Current Status
 
-## 🧩 Using with UXP DevTools (Experimental)
+This repository is currently validated for:
 
-You can also use this project as a UXP panel in Premiere Pro (24.4+):
+- macOS
+- Adobe Premiere Pro 2020+
+- Node.js 18+
+- the included macOS installer path for Claude Desktop
+- manual MCP registration for Codex, Claude Code, and similar MCP clients
 
-1. Open [Adobe UXP DevTools](https://developer.adobe.com/photoshop/uxp/2022/guides/devtool/).
-2. Click “Add Plugin” and select the `uxp-plugin/` folder.
-3. Start the panel in DevTools and open it in Premiere Pro via `Window > Plugins > MCP Bridge (UXP)`.
+Current local validation as of March 4, 2026:
 
-**⚠️ Note:**
-- UXP scripting in Premiere Pro is **experimental and limited**. Some features (like timeline and sequence editing) may not be available yet.
-- For full automation, use the CEP (legacy) panel.
+- `97` tools are exposed
+- `43` tools were live-executed against a real Premiere session
+- `50` tools were schema-validated in the same sweep
+- `3` destructive no-arg tools were intentionally skipped (`save_project`, `undo`, `consolidate_duplicates`)
+- `1` live runtime limitation remains: `get_render_queue_status` requires Adobe Media Encoder integration
 
----
+The full live sweep output is written to `/tmp/premiere-mcp-bridge/live-tool-sweep.json` when you run the verifier.
 
-## 🛠️ Supported Tools
+## What You Get
 
-### 📁 Project Management
-- **create_project** — Create a new Premiere Pro project
-- **open_project** — Open an existing project file
-- **save_project** — Save the current project
-- **save_project_as** — Save the project with a new name/location
+The server covers project operations, ingest, sequence creation, timeline editing, transitions, effects, keyframes, metadata, exports, and higher-level assembly workflows.
 
-### 📂 Media Management
-- **import_media** — Import a media file (video, audio, image)
-- **import_folder** — Import all media files from a folder
-- **create_bin** — Create a new bin (folder) in the project panel
+Example prompts:
 
-### 🎬 Sequence Management
-- **create_sequence** — Create a new sequence (timeline)
-- **duplicate_sequence** — Duplicate an existing sequence
-- **delete_sequence** — Delete a sequence
+- "List all sequences and show me which one is active."
+- "Import these three shots and build a rough product spot."
+- "Add cross dissolves to every cut on video track 1."
+- "Apply Gaussian Blur to the middle clip."
+- "Export the active sequence as FCP XML."
 
-### ⏱️ Timeline Operations
-- **add_to_timeline** — Add a media clip to a sequence timeline
-- **remove_from_timeline** — Remove a clip from the timeline
-- **move_clip** — Move a clip to a different position
-- **trim_clip** — Adjust the in/out points of a clip
-- **split_clip** — Split a clip at a specific time point
+High-level workflow tools included:
 
-### 🎨 Effects & Transitions
-- **apply_effect** — Apply a visual or audio effect to a clip
-- **remove_effect** — Remove an effect from a clip
-- **add_transition** — Add a transition between two clips
-- **add_transition_to_clip** — Add a transition to the start or end of a clip
+- `build_motion_graphics_demo`
+- `assemble_product_spot`
+- `build_brand_spot_from_mogrt_and_assets`
 
-### 🔊 Audio Operations
-- **adjust_audio_levels** — Adjust the volume of an audio clip
-- **add_audio_keyframes** — Add keyframes to audio levels
-- **mute_track** — Mute or unmute an entire audio track
+## Fastest Install (macOS)
 
-### 🎛️ Color Correction
-- **color_correct** — Apply basic color correction adjustments
-- **apply_lut** — Apply a Look-Up Table (LUT) to a clip
+```bash
+git clone https://github.com/hetpatel-11/Adobe_Premiere_Pro_MCP.git
+cd Adobe_Premiere_Pro_MCP
+npm run setup:mac
+```
 
-### 📤 Export & Rendering
-- **export_sequence** — Render and export a sequence to a video file
-- **export_frame** — Export a single frame as an image
+That installer will:
 
-### 🎥 Advanced Features
-- **create_multicam_sequence** — Create a multicamera sequence from multiple video clips
-- **create_proxy_media** — Generate proxy versions of media
-- **auto_edit_to_music** — Automatically edit video to music beats
-- **stabilize_clip** — Apply video stabilization
-- **speed_change** — Change the playback speed of a clip
+- install dependencies
+- build `dist/index.js`
+- enable Adobe CEP debug mode
+- install the `MCP Bridge (CEP)` extension
+- create `/tmp/premiere-mcp-bridge`
+- add the `premiere-pro` MCP entry to Claude Desktop
 
-### 🔍 Project/Media/Sequence Discovery
-- **list_project_items** — List all media items, bins, and assets in the project
-- **list_sequences** — List all sequences in the project
-- **list_sequence_tracks** — List all tracks in a sequence
-- **get_project_info** — Get comprehensive project information
+Important:
 
----
+- the supported UI bridge in this repo is the `MCP Bridge (CEP)` extension
+- the installer enables Adobe **CEP** debug mode automatically
+- Adobe **UXP developer mode is not required** for the supported CEP install path
 
-## ⚠️ What Doesn’t Work (and Why)
+After the installer finishes:
 
-### ❌ Not Supported (Adobe Scripting Limitations)
-- **add_text_overlay** — Text overlays (legacy titles) are deprecated/broken in modern Premiere Pro scripting
-- **add_shape** — Shape/graphics overlays are not supported by Premiere scripting
-- **Essential Graphics (MOGRTs)** — Not scriptable
-- **Direct pixel manipulation** — Not possible
+1. Quit and reopen your MCP client if it reads config on startup. If you used the installer, that means Claude Desktop.
+2. Quit and reopen Premiere Pro.
+3. Open `Window > Extensions > MCP Bridge (CEP)`.
+4. Set `Temp Directory` to `/tmp/premiere-mcp-bridge`.
+5. Click `Save Configuration`.
+6. Click `Start Bridge`.
+7. Click `Test Connection`.
 
-> **Why?** Adobe has removed or deprecated these scripting APIs. Only the features above are reliably scriptable.
+If the panel reports that Premiere is ready, the bridge is live.
 
----
+## Codex / Other MCP Clients
 
-## 🚦 Quick Start
+The macOS installer only updates Claude Desktop automatically. For Codex, Claude Code, or another MCP client, build locally and add the server yourself.
 
-### 1. Clone and Install
-```sh
-git clone https://github.com/hetpatel-11/Adobe_Premiere_Pro_MCP
-cd MCP_Adobe_Premiere_Pro
+```bash
 npm install
-```
-
-### 2. Build & Start the MCP Server
-```sh
 npm run build
-npm start
 ```
 
-### 3. Install the CEP Extension in Premiere Pro
-1. **Copy the `PremiereRemote` extension folder** to your Adobe CEP extensions directory:
-   - **macOS:** `~/Library/Application Support/Adobe/CEP/extensions/`
-   - **Windows:** `%APPDATA%/Adobe/CEP/extensions/`
-2. **Enable loading unsigned extensions:**
-   - macOS: Edit `~/Library/Preferences/com.adobe.CSXS.9.plist` and set `PlayerDebugMode` to `1`.
-   - Windows: Use `regedit` to set `PlayerDebugMode` to `1` under `HKEY_CURRENT_USER/Software/Adobe/CSXS.9`.
-   - [CEP Debugging Guide](https://github.com/Adobe-CEP/Getting-Started-guides/blob/master/Setting-up-Your-Environment.md)
-3. **Restart Premiere Pro.**
-4. **Open the extension:**
-   - Go to `Window > Extensions (Legacy) > PremiereRemote`.
-   - The panel should show "Ready!" if the bridge is running.
+Add the MCP server on a single line:
 
-### 4. Connect Claude (or another AI agent)
-- Configure Claude to use the MCP server as a tool endpoint.
-- Ask Claude to perform editing tasks (see supported features above).
+```bash
+codex mcp add premiere_pro --env PREMIERE_TEMP_DIR=/tmp/premiere-mcp-bridge -- node /absolute/path/to/Adobe_Premiere_Pro_MCP/dist/index.js
+```
 
----
+Important:
 
-## 🐞 Known Issues & Limitations
-- **Text/graphics overlays do not work** (see above)
-- **Some scripting APIs are buggy or version-dependent**
-- **CEP extensions are deprecated** in the latest Adobe apps (but still work for now)
-- **UXP scripting is experimental and limited** in Premiere Pro (see above)
-- **Error handling is robust, but some failures may be silent** due to Premiere scripting quirks
-- **This is a proof-of-concept / starting point** — not a polished commercial product
+- keep the command on one line
+- use the real absolute path to `dist/index.js`
+- restart the client after adding or updating the MCP entry
 
----
+If you use a different MCP client config file instead of `codex mcp add`, point that MCP entry at the same `dist/index.js` and set `PREMIERE_TEMP_DIR=/tmp/premiere-mcp-bridge`.
 
-## 💡 Why This Project Exists
-I wanted to see how far AI-powered video editing automation could go in Premiere Pro. There are real limitations, but this project is a great starting point for:
-- Automating repetitive editing tasks
-- Building smarter AI workflows
-- Exploring the boundaries of what’s possible with Adobe scripting
+## Verify the Install
 
-If you want to go further (e.g., advanced graphics/text), you’ll need After Effects scripting, Photoshop, or third-party plugins.
+Run the built-in checks:
 
----
+```bash
+npm run setup:doctor
+```
 
-## 📚 References
-- [Adobe Premiere Pro Scripting Guide](https://ppro-scripting.docsforadobe.dev/)
-- [Adobe CEP Resources](https://github.com/Adobe-CEP)
----
+That validates:
 
-## 🙏 Thanks & Contributions
-If you find this useful or want to contribute, feel free to open issues or PRs. Honest feedback and improvements are welcome! 
+- Node.js version
+- built server output
+- CEP extension install
+- `/tmp/premiere-mcp-bridge`
+- Adobe CEP debug mode
+- the Claude Desktop config entry when you use the installer path
+
+For a deeper end-to-end check, use a disposable Premiere project and run:
+
+```bash
+node scripts/live-tool-sweep.mjs
+```
+
+This creates temporary `Sweep ...` sequences in the currently open project so the toolchain is exercised against real data.
+
+## How the Bridge Works
+
+```text
++-----------+        +-----------+        +-----------+
+|  Client   |  MCP   | Node.js   | Files  | CEP Panel |
+| (Codex+)  |<------>| MCP Server|<------>| (Premiere)|
++-----------+        +-----------+        +-----------+
+                                                 |
+                                                 v
+                                          +-----------+
+                                          | Premiere  |
+                                          | DOM / QE  |
+                                          +-----------+
+```
+
+1. The client calls an MCP tool.
+2. The Node server generates ExtendScript plus shared helpers.
+3. The script is written into `/tmp/premiere-mcp-bridge`.
+4. The CEP panel polls that directory and runs the script through `CSInterface.evalScript()`.
+5. The panel writes the result back to the response file.
+6. The server returns structured JSON to the MCP client.
+
+## Tool Coverage
+
+The `97` exposed tools are grouped roughly like this:
+
+- Discovery and project inspection
+- Project and sequence management
+- Media import and bin management
+- Timeline placement and clip operations
+- Effects, transitions, color, and keyframes
+- Markers, metadata, labels, and work-area control
+- Export and interchange helpers
+- MOGRT, captions, proxies, and relink helpers
+- High-level ad / promo assembly workflows
+
+Use MCP introspection in your client to see the full tool catalog and exact schemas.
+
+## Real Limits
+
+This project is much more usable than the original prototype, but it is not magic.
+
+- Premiere scripting still does not expose every UI operation cleanly.
+- Professional title design still depends on real MOGRT assets or external graphics workflows.
+- `get_render_queue_status` is only useful when Adobe Media Encoder integration is available.
+- The best results come from real source footage, real audio, and real brand assets. The automation layer assembles and manipulates them; it does not replace editorial judgment.
+
+## Troubleshooting
+
+If the tools are visible but calls fail:
+
+1. Confirm Premiere Pro is open with a project loaded.
+2. Open `Window > Extensions > MCP Bridge (CEP)`.
+3. Confirm the temp directory is exactly `/tmp/premiere-mcp-bridge`.
+4. Click `Start Bridge`.
+5. If you updated the bridge code, right-click the panel and choose `Reload`.
+6. Retry the command.
+
+If the MCP client cannot find the server:
+
+1. Verify the absolute path to `dist/index.js`.
+2. Verify `PREMIERE_TEMP_DIR=/tmp/premiere-mcp-bridge`.
+3. Restart the MCP client after changing config.
+4. Run `npm run setup:doctor`.
+
+## Developer Notes
+
+Useful commands:
+
+```bash
+npm run build
+npm test -- --runInBand
+npm run setup:doctor
+node scripts/live-tool-sweep.mjs
+```
+
+See:
+
+- `QUICKSTART.md` for the shortest install path
+- `KNOWN_ISSUES.md` for current limits
+- `CONTRIBUTING.md` for development workflow
