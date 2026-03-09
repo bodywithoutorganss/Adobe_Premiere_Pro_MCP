@@ -734,10 +734,10 @@ export class PremiereProTools {
         description: 'Sets motion parameters (position, scale, rotation, anchor point) on a clip for precise transform control.',
         inputSchema: z.object({
           clipId: z.string().describe('The node ID of the clip to modify'),
-          position: z.array(z.number()).length(2).optional().describe('Position as [x, y] in normalized 0-1 coordinates'),
+          position: z.array(z.number()).length(2).optional().describe('Position as [x, y] in pixel coordinates (e.g., [960, 540] for center of 1920x1080)'),
           scale: z.number().optional().describe('Scale percentage (100 = original size)'),
           rotation: z.number().optional().describe('Rotation in degrees'),
-          anchorPoint: z.array(z.number()).length(2).optional().describe('Anchor point as [x, y] in normalized 0-1 coordinates')
+          anchorPoint: z.array(z.number()).length(2).optional().describe('Anchor point as [x, y] in pixel coordinates')
         })
       },
       {
@@ -4158,54 +4158,64 @@ export class PremiereProTools {
   ): Promise<any> {
     const script = `
       try {
-        var info = __findClip("${clipId}");
+        var info = __findClip(${JSON.stringify(clipId)});
         if (!info) return JSON.stringify({ success: false, error: "Clip not found" });
 
         var clip = info.clip;
         var motionComponent = null;
         for (var i = 0; i < clip.components.numItems; i++) {
-          if (clip.components[i].displayName === "Motion" || clip.components[i].matchName === "Motion") {
+          if (clip.components[i].displayName === "Motion") {
             motionComponent = clip.components[i];
             break;
           }
         }
         if (!motionComponent) return JSON.stringify({ success: false, error: "Motion component not found on clip" });
 
-        var properties = motionComponent.properties;
+        function findProp(comp, name) {
+          for (var j = 0; j < comp.properties.numItems; j++) {
+            if (comp.properties[j].displayName === name) return comp.properties[j];
+          }
+          return null;
+        }
+
         var appliedSettings = {};
 
         ${position ? `
         try {
-          properties[0].setValue([${position[0]}, ${position[1]}], true);
-          appliedSettings.position = [${position[0]}, ${position[1]}];
+          var positionProp = findProp(motionComponent, "Position");
+          if (positionProp) { positionProp.setValue([${position[0]}, ${position[1]}], true); appliedSettings.position = [${position[0]}, ${position[1]}]; }
+          else { appliedSettings.positionError = "Position property not found"; }
         } catch (e) { appliedSettings.positionError = e.toString(); }
         ` : ''}
 
         ${scale !== undefined ? `
         try {
-          properties[1].setValue(${scale}, true);
-          appliedSettings.scale = ${scale};
+          var scaleProp = findProp(motionComponent, "Scale");
+          if (scaleProp) { scaleProp.setValue(${scale}, true); appliedSettings.scale = ${scale}; }
+          else { appliedSettings.scaleError = "Scale property not found"; }
         } catch (e) { appliedSettings.scaleError = e.toString(); }
         ` : ''}
 
         ${rotation !== undefined ? `
         try {
-          properties[4].setValue(${rotation}, true);
-          appliedSettings.rotation = ${rotation};
+          var rotationProp = findProp(motionComponent, "Rotation");
+          if (rotationProp) { rotationProp.setValue(${rotation}, true); appliedSettings.rotation = ${rotation}; }
+          else { appliedSettings.rotationError = "Rotation property not found"; }
         } catch (e) { appliedSettings.rotationError = e.toString(); }
         ` : ''}
 
         ${anchorPoint ? `
         try {
-          properties[5].setValue([${anchorPoint[0]}, ${anchorPoint[1]}], true);
-          appliedSettings.anchorPoint = [${anchorPoint[0]}, ${anchorPoint[1]}];
+          var anchorProp = findProp(motionComponent, "Anchor Point");
+          if (anchorProp) { anchorProp.setValue([${anchorPoint[0]}, ${anchorPoint[1]}], true); appliedSettings.anchorPoint = [${anchorPoint[0]}, ${anchorPoint[1]}]; }
+          else { appliedSettings.anchorError = "Anchor Point property not found"; }
         } catch (e) { appliedSettings.anchorError = e.toString(); }
         ` : ''}
 
         return JSON.stringify({
           success: true,
           message: "Motion parameters applied",
-          clipId: "${clipId}",
+          clipId: ${JSON.stringify(clipId)},
           appliedSettings: appliedSettings
         });
       } catch (e) {
@@ -4234,37 +4244,49 @@ export class PremiereProTools {
 
     const script = `
       try {
-        var info = __findClip("${clipId}");
+        var info = __findClip(${JSON.stringify(clipId)});
         if (!info) return JSON.stringify({ success: false, error: "Clip not found" });
 
         var clip = info.clip;
         var motionComponent = null;
         for (var i = 0; i < clip.components.numItems; i++) {
-          if (clip.components[i].displayName === "Motion" || clip.components[i].matchName === "Motion") {
+          if (clip.components[i].displayName === "Motion") {
             motionComponent = clip.components[i];
             break;
           }
         }
         if (!motionComponent) return JSON.stringify({ success: false, error: "Motion component not found on clip" });
 
-        var properties = motionComponent.properties;
+        function findProp(comp, name) {
+          for (var j = 0; j < comp.properties.numItems; j++) {
+            if (comp.properties[j].displayName === name) return comp.properties[j];
+          }
+          return null;
+        }
+
         var results = {};
 
-        try {
-          properties[0].setValue([${position[0]}, ${position[1]}], true);
-          results.position = [${position[0]}, ${position[1]}];
-        } catch (e) { results.positionError = e.toString(); }
+        var positionProp = findProp(motionComponent, "Position");
+        if (positionProp) {
+          try {
+            positionProp.setValue([${position[0]}, ${position[1]}], true);
+            results.position = [${position[0]}, ${position[1]}];
+          } catch (e) { results.positionError = e.toString(); }
+        } else { results.positionError = "Position property not found"; }
 
-        try {
-          properties[1].setValue(${scale}, true);
-          results.scale = ${scale};
-        } catch (e) { results.scaleError = e.toString(); }
+        var scaleProp = findProp(motionComponent, "Scale");
+        if (scaleProp) {
+          try {
+            scaleProp.setValue(${scale}, true);
+            results.scale = ${scale};
+          } catch (e) { results.scaleError = e.toString(); }
+        } else { results.scaleError = "Scale property not found"; }
 
         return JSON.stringify({
           success: true,
           message: "Clip reframed for 9:16 vertical video",
-          clipId: "${clipId}",
-          framePosition: "${framePosition}",
+          clipId: ${JSON.stringify(clipId)},
+          framePosition: ${JSON.stringify(framePosition)},
           appliedSettings: results
         });
       } catch (e) {
